@@ -1,9 +1,8 @@
 import json
-import os
 import logging
 import shutil
-from pathlib import Path
 import traceback
+from pathlib import Path
 
 # Add schema validation functionality
 def validate_json_against_schema(data, schema, context=""):
@@ -71,7 +70,7 @@ def ensure_config_directory():
 
 def create_default_config(config_name, default_data):
     """Create a default config file if it doesn't exist"""
-    config_path = Path(f"config/{config_name}.json")
+    config_path = Path("config") / f"{config_name}.json"
     if not config_path.exists():
         try:
             with open(config_path, 'w') as f:
@@ -351,7 +350,7 @@ def load_game_data():
     loaded_configs = {}
     
     for config_name, default_data in configs_to_load:
-        file_path = f"config/{config_name}.json"
+        file_path = Path("config") / f"{config_name}.json"
         data = load_json_data(file_path)
         
         if data is None:
@@ -397,7 +396,7 @@ def save_game(player_data, save_name="default"):
 
 def load_game(save_name="default"):
     """Load player data from a JSON file"""
-    save_path = Path(f"saves/{save_name}.json")
+    save_path = Path("saves") / f"{save_name}.json"
     
     if not save_path.exists():
         logging.warning(f"Save file not found: {save_path}")

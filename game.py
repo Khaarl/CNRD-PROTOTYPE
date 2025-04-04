@@ -2,10 +2,13 @@ import sys
 import os
 import random
 import logging
+from pathlib import Path
+
+# Local imports - alphabetical order
+from daemon import Daemon, Program, TYPE_CHART, STATUS_EFFECTS
+from data_manager import load_game_data, load_game, save_game
+from location import Location
 from player import Player
-from daemon import Daemon, Program, TYPE_CHART, STATUS_EFFECTS  # Added imports for TYPE_CHART and STATUS_EFFECTS
-from location import Location # Added Location import
-import data_manager
 
 # Global game data (populated by initialize_game)
 DAEMON_BASE_STATS = {}
@@ -15,7 +18,7 @@ world_map = {} # Will store Location objects, keyed by ID
 def initialize_game():
     """Initialize the game data and objects, populating global variables."""
     # Load game data from config files
-    game_data = data_manager.load_game_data()
+    game_data = load_game_data()
 
     # Create global variables with loaded data
     global DAEMON_BASE_STATS, PROGRAMS, world_map # Ensure we modify the global world_map
@@ -527,7 +530,7 @@ def main(): # Explicitly ensure zero indentation
     # Try to load saved game
     player = None
     try:
-        player_data = data_manager.load_game(player_name.lower())
+        player_data = load_game(player_name.lower())
         if player_data:
             # Create player from saved data
             player = Player.from_dict(player_data, world_map) # Pass world_map if needed by Player.from_dict
@@ -724,11 +727,11 @@ def main(): # Explicitly ensure zero indentation
 
             elif command == "save":
                 try:
-                    success = data_manager.save_game(player.to_dict(), player.name.lower())
+                    success = save_game(player.to_dict(), player.name.lower())
                     if success:
                         print("Game saved successfully.")
                     else:
-                        # data_manager should log the error
+                        # save_game should log the error
                         print("Error saving game. Check logs.")
                 except Exception as e:
                     logging.error(f"Exception during save command: {e}", exc_info=True)
@@ -740,7 +743,7 @@ def main(): # Explicitly ensure zero indentation
                 save_choice = input("Save game before quitting? (y/n): ").lower()
                 if save_choice == 'y':
                     try:
-                        success = data_manager.save_game(player.to_dict(), player.name.lower())
+                        success = save_game(player.to_dict(), player.name.lower())
                         if success:
                             print("Game saved successfully.")
                         else:

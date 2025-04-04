@@ -3,12 +3,12 @@
 Bootstrap script for Cyberpunk NetRunner: Digital Hunters
 Handles initialization, error catching, and graceful shutdowns
 """
-import os
 import sys
 import logging
 import traceback
 from datetime import datetime
 from pathlib import Path
+
 import game
 
 def setup_logging():

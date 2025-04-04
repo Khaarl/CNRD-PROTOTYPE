@@ -1,3 +1,7 @@
+import random
+import logging
+from pathlib import Path
+
 class Location:
     """Represents a single location in the game world."""
     def __init__(self, loc_id, name, description, exits, encounter_rate=0.0, wild_daemons=None, 
@@ -45,7 +49,6 @@ class Location:
 
     def get_random_wild_daemon_info(self):
         """Selects a random wild daemon entry from this location's list."""
-        import random
         if not self.wild_daemons:
             return None
         return random.choice(self.wild_daemons)

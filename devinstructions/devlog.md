@@ -1,5 +1,32 @@
 # CNRD Development Log
-finally summrise changes into devlog.md, append to existing notes with date timeof entry at the start
+
+## Version 0.1.5 Implementation - Code Consistency Review (2025-04-12)
+
+### Code Structure Improvements
+- Standardized import statements across all modules with consistent ordering
+- Implemented Path objects from pathlib for cross-platform path handling
+- Removed redundant imports and organized import sections for clarity
+- Improved module dependency management by using local imports where appropriate
+
+### Error Handling Enhancements
+- Ensured consistent error handling patterns across all modules
+- Added more robust path handling for config and save files
+- Fixed potential circular import issues in the module architecture
+- Improved error logging with more descriptive messages
+
+### Technical Debt Reduction
+- Refactored directory creation to use Path objects consistently
+- Streamlined file load/save operations with consistent patterns
+- Better organization of module dependencies for easier future expansion
+- Refined import structures to support future testing and modularity
+
+### Planned for Next Update (Version 0.2.0)
+- Implement full unit test coverage for all modules
+- Refactor Player and Daemon classes for better inheritance structure
+- Add in-game documentation system for daemon types and programs
+- Improve combat balance with more sophisticated AI decision making
+- Add persistent achievements and player statistics tracking
+- Create a simple GUI interface option using a standard library module
 
 ## Version 0.1.4 - Bug Fixes and Combat System (2025-04-05)
 

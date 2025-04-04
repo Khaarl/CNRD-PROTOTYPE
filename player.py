@@ -1,8 +1,5 @@
-# Assuming Location class is imported if needed for type hinting, but not strictly necessary for this structure
-# from location import Location
-# Assuming Daemon class is imported
-from daemon import Daemon
 import logging
+from pathlib import Path
 
 class Player:
     """Represents the player character."""

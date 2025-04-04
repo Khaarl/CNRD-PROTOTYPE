@@ -1,8 +1,0 @@
-2025-04-04 20:14:30 - INFO - Logging initialized
-2025-04-04 20:14:30 - INFO - Starting CNRD bootstrap process
-2025-04-04 20:14:30 - INFO - Game starting up
-2025-04-04 20:14:30 - INFO - Game data loaded successfully from config files
-2025-04-04 20:14:30 - INFO - Game initialized with data from config files and Location objects created.
-2025-04-04 20:14:43 - WARNING - Save file not found: saves\eseee.json
-2025-04-04 20:14:57 - INFO - Game shutting down
-2025-04-04 20:14:57 - INFO - Game execution completed
