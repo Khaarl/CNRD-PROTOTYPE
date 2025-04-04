@@ -1,0 +1,47 @@
+{
+  "virulet": {
+    "type": "VIRUS",
+    "hp": 20,
+    "attack": 12,
+    "defense": 8,
+    "speed": 10,
+    "special": 9,
+    "programs": ["DATA_SIPHON", "ENCRYPT_SHIELD"]
+  },
+  "pyrowall": {
+    "type": "FIREWALL",
+    "hp": 18,
+    "attack": 9,
+    "defense": 12,
+    "speed": 8,
+    "special": 11,
+    "programs": ["FIREWALL_BASH", "ENCRYPT_SHIELD"]
+  },
+  "aquabyte": {
+    "type": "CRYPTO",
+    "hp": 19,
+    "attack": 10,
+    "defense": 10,
+    "speed": 10,
+    "special": 10,
+    "programs": ["DATA_SIPHON", "CRYPTO_SCRAMBLE"]
+  },
+  "rat_bot": {
+    "type": "TROJAN",
+    "hp": 15,
+    "attack": 13,
+    "defense": 7,
+    "speed": 12,
+    "special": 8,
+    "programs": ["EXPLOIT_CRACK", "DATA_SIPHON"]
+  },
+  "glitch_sprite": {
+    "type": "VIRUS",
+    "hp": 17,
+    "attack": 8,
+    "defense": 9,
+    "speed": 15,
+    "special": 12,
+    "programs": ["DATA_SIPHON", "EXPLOIT_CRACK"]
+  }
+}

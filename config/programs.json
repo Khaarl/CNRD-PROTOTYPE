@@ -1,0 +1,42 @@
+{
+  "DATA_SIPHON": {
+    "name": "Data Siphon",
+    "power": 40,
+    "accuracy": 95,
+    "type": "VIRUS",
+    "effect": "damage",
+    "description": "Siphons data from the target causing damage"
+  },
+  "FIREWALL_BASH": {
+    "name": "Firewall Bash",
+    "power": 45,
+    "accuracy": 90,
+    "type": "FIREWALL",
+    "effect": "damage",
+    "description": "A powerful strike with firewall code"
+  },
+  "ENCRYPT_SHIELD": {
+    "name": "Encrypt Shield",
+    "power": 0,
+    "accuracy": 100,
+    "type": "CRYPTO",
+    "effect": "defend",
+    "description": "Creates an encrypted shield to boost defense"
+  },
+  "EXPLOIT_CRACK": {
+    "name": "Exploit Crack",
+    "power": 35,
+    "accuracy": 100,
+    "type": "TROJAN",
+    "effect": "damage",
+    "description": "Exploits vulnerabilities for guaranteed damage"
+  },
+  "CRYPTO_SCRAMBLE": {
+    "name": "Crypto Scramble",
+    "power": 30,
+    "accuracy": 90,
+    "type": "CRYPTO",
+    "effect": "special",
+    "description": "Scrambles target's code to lower their attack"
+  }
+}

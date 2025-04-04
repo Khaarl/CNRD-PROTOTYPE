@@ -1,227 +1,227 @@
 import json
 import os
 import logging
-from daemon import Daemon, Program
-from location import Location
+import shutil
+from pathlib import Path
 
-DATA_DIR = "data"
-SAVE_DIR = "saves"
+def ensure_config_directory():
+    """Ensure the config directory exists"""
+    config_dir = Path("config")
+    if not config_dir.exists():
+        config_dir.mkdir(exist_ok=True)
+        logging.info("Created config directory")
 
-def ensure_dir_exists(directory):
-    """Create directory if it doesn't exist"""
-    if not os.path.exists(directory):
-        try:
-            os.makedirs(directory)
-            logging.info(f"Created directory: {directory}")
-        except Exception as e:
-            logging.error(f"Failed to create directory {directory}: {e}")
-            print(f"Error: Failed to create directory {directory}")
+def create_default_config(config_name, default_data):
+    """Create a default config file if it doesn't exist"""
+    config_path = Path(f"config/{config_name}.json")
+    if not config_path.exists():
+        with open(config_path, 'w') as f:
+            json.dump(default_data, f, indent=2)
+        logging.info(f"Created default config file: {config_name}.json")
+
+def load_json_data(file_path):
+    """Load data from a JSON file"""
+    try:
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading {file_path}: {str(e)}")
+        return None
 
 def load_game_data():
-    """Load game data from JSON files"""
-    ensure_dir_exists(DATA_DIR)
-    try:
-        daemons = load_json(os.path.join(DATA_DIR, "daemons.json"), {})
-        programs = load_json(os.path.join(DATA_DIR, "programs.json"), {})
-        locations = load_json(os.path.join(DATA_DIR, "locations.json"), {})
-        logging.info("Game data loaded successfully")
-        return {"daemons": daemons, "programs": programs, "locations": locations}
-    except Exception as e:
-        logging.error(f"Error in load_game_data: {e}")
-        print(f"Error loading game data: {e}")
-        # Return default empty data
-        return {"daemons": {}, "programs": {}, "locations": {}}
-
-def load_json(filepath, default=None):
-    """Load data from a JSON file with error handling"""
-    try:
-        if not os.path.exists(filepath):
-            logging.warning(f"File not found: {filepath}, using default values")
-            return default if default is not None else {}
-            
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-            logging.info(f"Loaded data from {filepath}")
-            return data
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON error in {filepath}: {e}")
-        print(f"Error: Invalid JSON in {filepath}")
-        return default if default is not None else {}
-    except Exception as e:
-        logging.error(f"Error loading {filepath}: {e}")
-        print(f"Error loading {filepath}: {e}")
-        return default if default is not None else {}
-
-def save_game(player, world_map, filename):
-    """Save current game state to a file"""
-    ensure_dir_exists(SAVE_DIR)
-    try:
-        # Create serializable player data
-        player_data = {
-            "name": player.name,
-            "current_location_id": player.current_location_id,
-            "daemons": []
+    """Load all game data from config files"""
+    ensure_config_directory()
+    
+    # Default data (will be used if config files don't exist)
+    default_daemons = {
+        "virulet": {
+            "type": "VIRUS",
+            "hp": 20,
+            "attack": 12,
+            "defense": 8,
+            "speed": 10,
+            "special": 9,
+            "programs": ["DATA_SIPHON", "ENCRYPT_SHIELD"]
+        },
+        "pyrowall": {
+            "type": "FIREWALL",
+            "hp": 18,
+            "attack": 9,
+            "defense": 12,
+            "speed": 8,
+            "special": 11,
+            "programs": ["FIREWALL_BASH", "ENCRYPT_SHIELD"]
+        },
+        "aquabyte": {
+            "type": "CRYPTO",
+            "hp": 19,
+            "attack": 10,
+            "defense": 10,
+            "speed": 10,
+            "special": 10,
+            "programs": ["DATA_SIPHON", "CRYPTO_SCRAMBLE"]
+        },
+        "rat_bot": {
+            "type": "TROJAN",
+            "hp": 15,
+            "attack": 13,
+            "defense": 7,
+            "speed": 12,
+            "special": 8,
+            "programs": ["EXPLOIT_CRACK", "DATA_SIPHON"]
+        },
+        "glitch_sprite": {
+            "type": "VIRUS",
+            "hp": 17,
+            "attack": 8,
+            "defense": 9,
+            "speed": 15,
+            "special": 12,
+            "programs": ["DATA_SIPHON", "EXPLOIT_CRACK"]
         }
-        
-        # Convert each daemon to a dictionary
-        for d in player.daemons:
-            daemon_dict = {
-                "name": d.name,
-                "types": d.types,
-                "level": d.level,
-                "xp": d.xp,
-                "base_stats": d.base_stats,
-                "stats": d.stats,
-                "programs": [],
-                "status_effect": d.status_effect
-            }
-            # Convert programs to dictionaries
-            for p in d.programs:
-                program_dict = {
-                    "name": p.name,
-                    "type": p.type,
-                    "power": p.power,
-                    "effect": p.effect
+    }
+    
+    default_programs = {
+        "DATA_SIPHON": {
+            "name": "Data Siphon",
+            "power": 40,
+            "accuracy": 95,
+            "type": "VIRUS",
+            "effect": "damage",
+            "description": "Siphons data from the target causing damage"
+        },
+        "FIREWALL_BASH": {
+            "name": "Firewall Bash",
+            "power": 45,
+            "accuracy": 90,
+            "type": "FIREWALL",
+            "effect": "damage",
+            "description": "A powerful strike with firewall code"
+        },
+        "ENCRYPT_SHIELD": {
+            "name": "Encrypt Shield",
+            "power": 0,
+            "accuracy": 100,
+            "type": "CRYPTO",
+            "effect": "defend",
+            "description": "Creates an encrypted shield to boost defense"
+        },
+        "EXPLOIT_CRACK": {
+            "name": "Exploit Crack",
+            "power": 35,
+            "accuracy": 100,
+            "type": "TROJAN",
+            "effect": "damage",
+            "description": "Exploits vulnerabilities for guaranteed damage"
+        },
+        "CRYPTO_SCRAMBLE": {
+            "name": "Crypto Scramble",
+            "power": 30,
+            "accuracy": 90,
+            "type": "CRYPTO",
+            "effect": "special",
+            "description": "Scrambles target's code to lower their attack"
+        }
+    }
+    
+    default_locations = {
+        "start_location": "home",
+        "locations": {
+            "home": {
+                "name": "Home",
+                "description": "Your small apartment with a computer setup",
+                "encounter_rate": 0,
+                "exits": {
+                    "north": "uptown",
+                    "east": "downtown"
                 }
-                daemon_dict["programs"].append(program_dict)
-            
-            player_data["daemons"].append(daemon_dict)
-        
-        # Write to file
-        save_path = os.path.join(SAVE_DIR, f"{filename}.json")
+            },
+            "uptown": {
+                "name": "Uptown District",
+                "description": "A clean, high-tech area with corporate buildings",
+                "encounter_rate": 20,
+                "exits": {
+                    "south": "home",
+                    "east": "central_hub"
+                }
+            },
+            "downtown": {
+                "name": "Downtown District",
+                "description": "A gritty area with old tech and sketchy connections",
+                "encounter_rate": 30,
+                "exits": {
+                    "west": "home",
+                    "north": "central_hub"
+                }
+            },
+            "central_hub": {
+                "name": "Central Network Hub",
+                "description": "The main connection point for the city's networks",
+                "encounter_rate": 40,
+                "exits": {
+                    "west": "uptown",
+                    "south": "downtown",
+                    "north": "daemon_lab"
+                }
+            },
+            "daemon_lab": {
+                "name": "Daemon Research Lab",
+                "description": "A high-security facility studying daemon code",
+                "encounter_rate": 60,
+                "exits": {
+                    "south": "central_hub"
+                }
+            }
+        }
+    }
+    
+    # Create default config files if they don't exist
+    create_default_config("daemons", default_daemons)
+    create_default_config("programs", default_programs)
+    create_default_config("locations", default_locations)
+    
+    # Load data from config files
+    daemons_data = load_json_data("config/daemons.json") or default_daemons
+    programs_data = load_json_data("config/programs.json") or default_programs
+    locations_data = load_json_data("config/locations.json") or default_locations
+    
+    logging.info("Game data loaded successfully from config files")
+    
+    return {
+        "daemons": daemons_data,
+        "programs": programs_data,
+        "locations": locations_data
+    }
+
+def save_game(player_data, save_name="default"):
+    """Save player data to a JSON file"""
+    save_dir = Path("saves")
+    save_dir.mkdir(exist_ok=True)
+    
+    save_path = save_dir / f"{save_name}.json"
+    
+    try:
         with open(save_path, 'w') as f:
-            json.dump({"player": player_data}, f, indent=2)
-        
-        logging.info(f"Game saved as '{filename}'")
-        print(f"Game saved as '{filename}'")
+            json.dump(player_data, f)
+        logging.info(f"Game saved successfully to {save_path}")
         return True
-        
     except Exception as e:
-        logging.error(f"Error saving game: {e}")
-        print(f"Error saving game: {e}")
+        logging.error(f"Error saving game: {str(e)}")
         return False
 
-def load_save(filename, world_map):
-    """Load a saved game"""
-    from player import Player
-    save_path = os.path.join(SAVE_DIR, f"{filename}.json")
+def load_game(save_name="default"):
+    """Load player data from a JSON file"""
+    save_path = Path(f"saves/{save_name}.json")
     
-    if not os.path.exists(save_path):
-        logging.error(f"Save file not found: {save_path}")
-        print(f"Error: Save file '{filename}.json' not found.")
+    if not save_path.exists():
+        logging.warning(f"Save file not found: {save_path}")
         return None
     
     try:
-        # Read save file
         with open(save_path, 'r') as f:
-            save_data = json.load(f)
-        
-        # Validate save data structure
-        if "player" not in save_data:
-            logging.error(f"Invalid save file format: {filename}.json")
-            print(f"Error: Invalid save file format.")
-            return None
-            
-        player_data = save_data["player"]
-        
-        # Validate required fields
-        required_fields = ["name", "current_location_id", "daemons"]
-        for field in required_fields:
-            if field not in player_data:
-                logging.error(f"Missing required field in save file: {field}")
-                print(f"Error: Save file is missing required data.")
-                return None
-        
-        # Validate location exists in world map
-        location_id = player_data["current_location_id"]
-        if location_id not in world_map:
-            logging.error(f"Save file references invalid location: {location_id}")
-            print(f"Error: Save file references an invalid location.")
-            return None
-        
-        # Create player
-        player = Player(player_data["name"], player_data["current_location_id"], world_map)
-        
-        # Load daemons
-        for d_data in player_data["daemons"]:
-            # Create programs
-            programs = []
-            if "programs" in d_data:
-                for p in d_data["programs"]:
-                    program = Program(
-                        p.get("name", "Unknown Program"),
-                        p.get("type", "Normal"),
-                        p.get("power", 10),
-                        p.get("effect", None)
-                    )
-                    programs.append(program)
-            
-            # Create daemon
-            base_stats = d_data.get("base_stats", {'hp': 40, 'attack': 40, 'defense': 40, 'speed': 40})
-            daemon = Daemon(
-                d_data.get("name", "Unknown Daemon"),
-                d_data.get("types", ["Normal"]),
-                base_stats,
-                d_data.get("level", 1),
-                programs,
-                d_data.get("xp", 0)
-            )
-            
-            # Set stats
-            if "stats" in d_data:
-                daemon.stats = d_data["stats"]
-                
-            # Set status effect
-            daemon.status_effect = d_data.get("status_effect", None)
-            
-            # Add daemon to player
-            player.add_daemon(daemon)
-        
-        logging.info(f"Game loaded from '{filename}'")
-        print(f"Game loaded from '{filename}'")
-        return player
-        
-    except json.JSONDecodeError:
-        logging.error(f"Invalid JSON in save file: {save_path}")
-        print(f"Error: Save file is corrupted or not valid JSON.")
-        return None
+            player_data = json.load(f)
+        logging.info(f"Game loaded successfully from {save_path}")
+        return player_data
     except Exception as e:
-        logging.error(f"Error loading save: {e}")
-        print(f"Error loading save: {e}")
+        logging.error(f"Error loading game: {str(e)}")
         return None
-
-def export_current_data(world_map, daemon_stats, programs):
-    """Export current game data to JSON files"""
-    ensure_dir_exists(DATA_DIR)
-    try:
-        # Export daemon data
-        daemon_data = {d_id: {"base_stats": {k: v for k, v in stats.items() if k != "types"}, 
-                             "types": stats["types"]} 
-                      for d_id, stats in daemon_stats.items()}
-        with open(os.path.join(DATA_DIR, "daemons.json"), 'w') as f:
-            json.dump(daemon_data, f, indent=2)
-        
-        # Export program data
-        program_data = {p_id: {"type": prog.type, "power": prog.power, "effect": prog.effect} 
-                       for p_id, prog in programs.items()}
-        with open(os.path.join(DATA_DIR, "programs.json"), 'w') as f:
-            json.dump(program_data, f, indent=2)
-        
-        # Export location data
-        location_data = {loc_id: {"name": loc.name, 
-                                 "description": loc.description, 
-                                 "exits": loc.exits, 
-                                 "encounter_rate": loc.encounter_rate, 
-                                 "wild_daemons": loc.wild_daemons} 
-                        for loc_id, loc in world_map.items()}
-        with open(os.path.join(DATA_DIR, "locations.json"), 'w') as f:
-            json.dump(location_data, f, indent=2)
-            
-        logging.info("Current game data exported to 'data' directory.")
-        print("Current game data exported to 'data' directory.")
-        return True
-        
-    except Exception as e:
-        logging.error(f"Error exporting game data: {e}")
-        print(f"Error exporting game data: {e}")
-        return False

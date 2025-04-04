@@ -1,5 +1,25 @@
 # CNRD Development Log
 
+## Version 0.1.2 - Configuration Update
+
+### New Features
+- Moved all hardcoded data to external JSON configuration files:
+  - `config/daemons.json`: Contains all daemon base stats
+  - `config/programs.json`: Contains all program definitions
+  - `config/locations.json`: Contains world map and location data
+- Created automatic configuration system that:
+  - Creates config files if they don't exist
+  - Always loads from config files when available
+  - Falls back to defaults only when necessary
+- Added config directory creation to bootstrap.py startup process
+
+### Technical Improvements
+- Refactored data loading code in data_manager.py
+- Removed hardcoded data from game.py
+- Cleaned up daemon.py class implementation
+- Enhanced configuration management with proper error handling
+- Improved code modularity by centralizing data loading
+
 ## Version 0.1.1 - Stability Update (Current)
 
 ### Bug Fixes

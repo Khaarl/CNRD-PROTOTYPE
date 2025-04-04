@@ -1,0 +1,19 @@
+2025-04-04 19:04:12 - INFO - Logging initialized
+2025-04-04 19:04:12 - INFO - Starting CNRD bootstrap process
+2025-04-04 19:04:12 - INFO - Game starting up
+2025-04-04 19:04:12 - INFO - Game data loaded successfully from config files
+2025-04-04 19:04:12 - INFO - Game initialized with data from config files
+2025-04-04 19:04:16 - WARNING - Save file not found: saves\khaa.json
+2025-04-04 19:04:34 - ERROR - Invalid start location ID: home
+2025-04-04 19:04:34 - CRITICAL - Unhandled exception: Invalid start location ID: home
+2025-04-04 19:04:34 - CRITICAL - Traceback (most recent call last):
+  File "D:\PROJECTS\CNRD PROTOTYPE\bootstrap.py", line 51, in run_game_with_error_handling
+    game.main()
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 126, in main
+    player = Player(player_name, start_location, [starter_daemon])
+  File "D:\PROJECTS\CNRD PROTOTYPE\player.py", line 27, in __init__
+    raise ValueError(f"Invalid start location ID: {start_location_id}")
+ValueError: Invalid start location ID: home
+
+2025-04-04 19:04:34 - INFO - Crash report created: logs\crashes\crash_20250404_190434.txt
+2025-04-04 19:04:34 - INFO - Game execution completed

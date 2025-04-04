@@ -1,155 +1,235 @@
-import random # Might need later for combat calculations, etc.
+import random
+import logging
 
 class Program:
-    """Represents a single program/ability a Daemon can use."""
-    def __init__(self, name, p_type, power, effect=None):
+    """A program that a daemon can use in battle"""
+    
+    def __init__(self, id, name, power, accuracy, program_type, effect, description):
+        self.id = id
         self.name = name
-        self.type = p_type # e.g., "Malware", "Encryption"
-        self.power = power # Base damage/effect strength
-        self.effect = effect # Optional: e.g., status change like "raise_defense"
-
-# --- Example Basic Programs ---
-# Define some programs globally or load them from data later
-DATA_SIPHON = Program("Data Siphon", "Malware", 40)
-FIREWALL_BASH = Program("Firewall Bash", "Shell", 35)
-ENCRYPT_SHIELD = Program("Encrypt Shield", "Encryption", 0, effect="raise_defense") # Example effect
-
+        self.power = power
+        self.accuracy = accuracy
+        self.type = program_type
+        self.effect = effect
+        self.description = description
+    
+    def to_dict(self):
+        """Convert to dictionary for serialization"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "power": self.power,
+            "accuracy": self.accuracy,
+            "type": self.type,
+            "effect": self.effect,
+            "description": self.description
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Create a Program from a dictionary"""
+        return cls(
+            data["id"],
+            data["name"],
+            data["power"],
+            data["accuracy"],
+            data["type"],
+            data["effect"],
+            data["description"]
+        )
 
 class Daemon:
-    """Represents a Digital Entity (CyberPet)."""
-
-    def __init__(self, name, types, base_stats, level=1, programs=None, xp=0):
-        """
-        Initializes a new Daemon.
-        Args:
-            name (str): The Daemon's name.
-            types (list[str]): List of type strings (e.g., ["Malware", "Ghost"]).
-            base_stats (dict): Dictionary of base stats like
-                               {'hp': 45, 'attack': 49, 'defense': 49, 'speed': 45}.
-            level (int): Starting level.
-            programs (list[Program]): List of starting programs.
-            xp (int): Current experience points.
-        """
+    """A daemon that can be captured and used in battle"""
+    
+    def __init__(self, name, daemon_type, level=1, base_hp=0, base_attack=0, 
+                 base_defense=0, base_speed=0, base_special=0, programs=None):
         self.name = name
-        self.types = types
+        self.daemon_type = daemon_type
         self.level = level
-        self.xp = xp
-        self.base_stats = base_stats # Store base stats for recalculation if needed
-
-        # Calculate current stats based on base and level (simplified for prototype)
-        self.stats = self._calculate_stats()
-
-        self.programs = programs if programs else []
-        self.status_effect = None # e.g., "PARALYZED", None
-        self.xp_next_level = self._calculate_xp_needed(self.level) # Calculate initial XP needed
-
+        self.base_hp = base_hp
+        self.base_attack = base_attack
+        self.base_defense = base_defense
+        self.base_speed = base_speed
+        self.base_special = base_special
+        
+        # Calculate actual stats based on level
+        self._calculate_stats()
+        
+        # Set current HP to max HP
+        self.hp = self.max_hp
+        
+        # Experience points
+        self.xp = 0
+        self.xp_needed = self._calculate_xp_needed()
+        
+        # Programs (moves)
+        self.programs = programs if programs is not None else []
+    
     def _calculate_stats(self):
-        """Calculates current stats based on base stats and level."""
-        # In a full game, this would be more complex (IVs, EVs, complex formula)
-        # Simple linear scaling for prototype
-        stats = {
-            'max_hp': self.base_stats['hp'] + (self.level * 2),
-            'attack': self.base_stats['attack'] + self.level,
-            'defense': self.base_stats['defense'] + self.level,
-            'speed': self.base_stats['speed'] + self.level,
-        }
-        # Ensure current HP doesn't exceed new max HP if stats are recalculated
-        current_hp = stats['max_hp'] # Default to full health
-        if hasattr(self, 'stats'): # If stats already exist (e.g., level up), preserve HP ratio
-            hp_ratio = self.stats['hp'] / self.stats['max_hp'] if self.stats['max_hp'] > 0 else 1
-            current_hp = int(stats['max_hp'] * hp_ratio)
-
-        stats['hp'] = current_hp
-        return stats
-
-    def _calculate_xp_needed(self, level):
-        """Calculates XP needed for the next level (simple example)."""
-        # Could use a standard formula like medium-fast from Pokémon, or simpler:
-        return int(10 * (level ** 1.5)) # Example simple curve
-
-    def is_fainted(self):
-        """Checks if the Daemon has 0 or less HP."""
-        return self.stats['hp'] <= 0
-
-    def take_damage(self, amount):
-        """Applies damage to the Daemon's HP."""
-        damage = max(0, amount) # Ensure damage isn't negative
-        self.stats['hp'] -= damage
-        if self.stats['hp'] < 0:
-            self.stats['hp'] = 0
-        print(f"{self.name} took {damage} damage! Remaining HP: {self.stats['hp']}/{self.stats['max_hp']}")
-        if self.is_fainted():
-            print(f"{self.name} has been deactivated!")
-
-    def heal(self, amount):
-        """Heals the Daemon's HP."""
-        heal_amount = max(0, amount)
-        self.stats['hp'] += heal_amount
-        if self.stats['hp'] > self.stats['max_hp']:
-            self.stats['hp'] = self.stats['max_hp']
-        print(f"{self.name} recovered {heal_amount} HP. Current HP: {self.stats['hp']}/{self.stats['max_hp']}")
-
-    def display_summary(self):
-        """Prints a basic summary of the Daemon."""
-        print(f"--- {self.name} (Lv.{self.level}) ---")
-        print(f"  Type(s): {', '.join(self.types)}")
-        print(f"  HP: {self.stats['hp']}/{self.stats['max_hp']}")
-        print(f"  Stats: Atk={self.stats['attack']}, Def={self.stats['defense']}, Spd={self.stats['speed']}")
-        print(f"  XP: {self.xp}/{self.xp_next_level}")
-        program_names = [p.name for p in self.programs]
-        print(f"  Programs: {', '.join(program_names) if program_names else 'None'}")
-        if self.status_effect:
-            print(f"  Status: {self.status_effect}")
-        print("-" * (len(self.name) + 12))
-
-    def add_xp(self, amount):
-        """Adds XP and checks for level up."""
-        if self.is_fainted(): # Can't gain XP if fainted
-             print(f"{self.name} is deactivated and cannot gain XP.")
-             return
-        if self.level >= 100: # Assuming level cap
-             print(f"{self.name} is at max level!")
-             return
-
+        """Calculate the daemon's stats based on base stats and level"""
+        level_multiplier = 1 + (self.level - 1) * 0.1
+        
+        self.max_hp = int(self.base_hp * level_multiplier)
+        self.attack = int(self.base_attack * level_multiplier)
+        self.defense = int(self.base_defense * level_multiplier)
+        self.speed = int(self.base_speed * level_multiplier)
+        self.special = int(self.base_special * level_multiplier)
+    
+    def _calculate_xp_needed(self):
+        """Calculate the XP needed for the next level"""
+        # Simple formula: 100 XP for level 1, then increases by 50 each level
+        return 100 + (self.level - 1) * 50
+    
+    def gain_xp(self, amount):
+        """Gain experience points and level up if necessary"""
         self.xp += amount
-        print(f"{self.name} gained {amount} XP!")
-        while self.xp >= self.xp_next_level and self.level < 100:
-             self.level_up()
-
+        logging.info(f"{self.name} gained {amount} XP. Total: {self.xp}/{self.xp_needed}")
+        
+        # Check for level up
+        while self.xp >= self.xp_needed:
+            self.level_up()
+    
     def level_up(self):
-        """Handles the level-up process."""
+        """Level up the daemon"""
+        # Subtract XP needed
+        self.xp -= self.xp_needed
+        
+        # Increase level
         self.level += 1
-        # Remove XP needed for the level just gained
-        # Important: Check if xp is still >= next level's requirement *after* subtracting
-        xp_needed_for_prev_level = self.xp_next_level
-        self.xp -= xp_needed_for_prev_level
-
-        print(f"{self.name} grew to Level {self.level}!")
-
-        # Recalculate stats and update next level XP threshold
-        old_max_hp = self.stats['max_hp']
-        self.stats = self._calculate_stats()
-        self.xp_next_level = self._calculate_xp_needed(self.level)
-
-        # Restore HP by the amount max HP increased (like Pokémon)
-        hp_increase = self.stats['max_hp'] - old_max_hp
-        self.heal(hp_increase) # Use heal method for consistency
-
-        self.display_summary() # Show new stats
-
-        # Add logic here later to check for learning new programs at certain levels
-        # Example: self.check_learn_new_program()
+        
+        # Recalculate stats
+        old_max_hp = self.max_hp
+        old_attack = self.attack
+        old_defense = self.defense
+        old_speed = self.speed
+        old_special = self.special
+        
+        self._calculate_stats()
+        
+        # Update XP needed for next level
+        self.xp_needed = self._calculate_xp_needed()
+        
+        # Heal on level up
+        self.hp = self.max_hp
+        
+        logging.info(f"{self.name} leveled up to {self.level}!")
+        logging.info(f"HP: {old_max_hp} -> {self.max_hp}")
+        logging.info(f"Attack: {old_attack} -> {self.attack}")
+        logging.info(f"Defense: {old_defense} -> {self.defense}")
+        logging.info(f"Speed: {old_speed} -> {self.speed}")
+        logging.info(f"Special: {old_special} -> {self.special}")
+    
+    def use_program(self, program, target):
+        """Use a program on a target daemon"""
+        # Check if program is one of this daemon's programs
+        if program not in self.programs:
+            logging.warning(f"{self.name} doesn't know the program {program.name}!")
+            return False, f"{self.name} doesn't know that program!"
+        
+        # Check for accuracy
+        hit = random.randint(1, 100) <= program.accuracy
+        
+        if not hit:
+            return False, f"{self.name}'s {program.name} missed!"
+        
+        # Handle different program effects
+        if program.effect == "damage":
+            # Calculate damage
+            type_bonus = 1.0
+            if program.type == self.daemon_type:
+                type_bonus = 1.5  # STAB (Same Type Attack Bonus)
+            
+            damage = int((self.attack * program.power / 100) * type_bonus)
+            
+            # Apply damage
+            target.hp -= damage
+            if target.hp < 0:
+                target.hp = 0
+            
+            return True, f"{self.name} used {program.name} and dealt {damage} damage to {target.name}!"
+            
+        elif program.effect == "defend":
+            # For simplicity, just a temporary defense boost
+            self.defense += int(self.defense * 0.2)  # 20% boost
+            
+            return True, f"{self.name} used {program.name} and boosted its defense!"
+            
+        elif program.effect == "special":
+            # For simplicity, lower target's attack
+            target.attack = int(target.attack * 0.8)  # 20% reduction
+            
+            return True, f"{self.name} used {program.name} and lowered {target.name}'s attack!"
+            
+        else:
+            return False, f"Unknown program effect: {program.effect}"
+    
+    def to_dict(self):
+        """Convert to dictionary for serialization"""
+        return {
+            "name": self.name,
+            "daemon_type": self.daemon_type,
+            "level": self.level,
+            "base_hp": self.base_hp,
+            "base_attack": self.base_attack,
+            "base_defense": self.base_defense,
+            "base_speed": self.base_speed,
+            "base_special": self.base_special,
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "attack": self.attack,
+            "defense": self.defense,
+            "speed": self.speed,
+            "special": self.special,
+            "xp": self.xp,
+            "xp_needed": self.xp_needed,
+            "programs": [p.to_dict() for p in self.programs]
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Create a Daemon from a dictionary"""
+        # First create the daemon without programs
+        daemon = cls(
+            data["name"],
+            data["daemon_type"],
+            data["level"],
+            data["base_hp"],
+            data["base_attack"],
+            data["base_defense"],
+            data["base_speed"],
+            data["base_special"]
+        )
+        
+        # Then add saved values that would be calculated
+        daemon.hp = data["hp"]
+        daemon.max_hp = data["max_hp"]
+        daemon.attack = data["attack"]
+        daemon.defense = data["defense"]
+        daemon.speed = data["speed"]
+        daemon.special = data["special"]
+        daemon.xp = data["xp"]
+        daemon.xp_needed = data["xp_needed"]
+        
+        # Add programs
+        daemon.programs = [Program.from_dict(p) for p in data["programs"]]
+        
+        return daemon
 
 # --- Example Daemon Creation (for testing if run directly) ---
 if __name__ == "__main__":
+    # Example program definitions
+    data_siphon = Program(1, "Data Siphon", 40, 90, "Malware", "damage", "Drains data from the target.")
+    firewall_bash = Program(2, "Firewall Bash", 35, 95, "Shell", "damage", "Bashes the target with a firewall.")
+    encrypt_shield = Program(3, "Encrypt Shield", 0, 100, "Encryption", "defend", "Raises defense by encrypting data.")
+    
     # Base stats definition
-    virulet_base = {'hp': 40, 'attack': 55, 'defense': 40, 'speed': 60}
+    virulet_base = {'hp': 40, 'attack': 55, 'defense': 40, 'speed': 60, 'special': 50}
     # Create an instance
-    starter_virulet = Daemon("Virulet", ["Malware"], virulet_base, level=5, programs=[DATA_SIPHON])
+    starter_virulet = Daemon("Virulet", "Malware", level=5, base_hp=virulet_base['hp'], 
+                             base_attack=virulet_base['attack'], base_defense=virulet_base['defense'], 
+                             base_speed=virulet_base['speed'], base_special=virulet_base['special'], 
+                             programs=[data_siphon, firewall_bash])
 
-    starter_virulet.display_summary()
-    starter_virulet.take_damage(15)
-    starter_virulet.add_xp(100) # Example XP gain
-    starter_virulet.add_xp(500) # Gain more XP to test multiple level ups
-    starter_virulet.take_damage(100) # Test fainting
-    starter_virulet.add_xp(50) # Test no XP gain when fainted
+    starter_virulet.gain_xp(100) # Example XP gain
+    starter_virulet.gain_xp(500) # Gain more XP to test multiple level ups
+    starter_virulet.use_program(data_siphon, starter_virulet) # Test program usage

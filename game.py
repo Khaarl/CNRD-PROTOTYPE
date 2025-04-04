@@ -1,452 +1,248 @@
+import sys
+import os
 import random
-import sys # For exiting the game
-import os # For checking file existence
 import logging
-from datetime import datetime
-
-# Import classes from other files
-from location import Location
 from player import Player
-from daemon import Daemon, Program, DATA_SIPHON, FIREWALL_BASH, ENCRYPT_SHIELD # Import example programs
-from data_manager import load_game_data, save_game, load_save, export_current_data
+from daemon import Daemon, Program
+import data_manager
 
-# --- Set up logging ---
-def setup_logging():
-    """Configure logging for the game"""
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+# Remove hardcoded dictionaries and load from config
+def initialize_game():
+    """Initialize the game data and objects"""
+    # Load game data from config files
+    game_data = data_manager.load_game_data()
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"cnrd_log_{timestamp}.log")
+    # Create global variables with loaded data
+    global DAEMON_BASE_STATS, PROGRAMS, world_map
+    DAEMON_BASE_STATS = game_data["daemons"]
+    PROGRAMS = game_data["programs"]
     
+    # Load world map
+    world_data = game_data["locations"]
+    world_map = world_data["locations"]
+    
+    logging.info("Game initialized with data from config files")
+    return world_data["start_location"]
+
+def create_daemon(daemon_name, level=1):
+    """Create a new daemon object from the base stats"""
+    if daemon_name not in DAEMON_BASE_STATS:
+        logging.error(f"Unknown daemon: {daemon_name}")
+        return None
+        
+    base_stats = DAEMON_BASE_STATS[daemon_name]
+    
+    # Create programs for the daemon
+    daemon_programs = []
+    for program_id in base_stats.get("programs", []):
+        if program_id in PROGRAMS:
+            program_data = PROGRAMS[program_id]
+            program = Program(
+                program_id,
+                program_data["name"], 
+                program_data["power"], 
+                program_data["accuracy"],
+                program_data["type"],
+                program_data["effect"],
+                program_data["description"]
+            )
+            daemon_programs.append(program)
+    
+    # Create and return the daemon
+    return Daemon(
+        name=daemon_name,
+        daemon_type=base_stats["type"],
+        level=level,
+        base_hp=base_stats["hp"],
+        base_attack=base_stats["attack"],
+        base_defense=base_stats["defense"],
+        base_speed=base_stats["speed"],
+        base_special=base_stats["special"],
+        programs=daemon_programs
+    )
+
+def main():
+    # Configure logging
     logging.basicConfig(
-        filename=log_file,
-        level=logging.DEBUG,
-        format='%(asctime)s [%(levelname)s] %(message)s',
+        filename='logs/game.log',
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Add console handler for INFO level and above
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(message)s')  # Simpler format for console
-    console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(console_handler)
     
-    logging.info("Logging system initialized")
-    return log_file
-
-# --- Game Data ---
-
-# Define Base Daemon Stats (Could be loaded from JSON later)
-DAEMON_BASE_STATS = {
-    "virulet": {'hp': 40, 'attack': 55, 'defense': 40, 'speed': 60, 'types': ["Malware"]},
-    "pyrowall": {'hp': 50, 'attack': 40, 'defense': 65, 'speed': 40, 'types': ["Shell", "Encryption"]},
-    "aquabyte": {'hp': 45, 'attack': 50, 'defense': 50, 'speed': 50, 'types': ["Ghost", "Worm"]},
-    "rat_bot": {'hp': 30, 'attack': 40, 'defense': 30, 'speed': 70, 'types': ["Physical"]},
-    "glitch_sprite": {'hp': 35, 'attack': 60, 'defense': 35, 'speed': 55, 'types': ["Ghost", "Malware"]},
-}
-
-# Define Programs (Could be loaded from JSON later)
-# Using the ones defined in daemon.py for now
-PROGRAMS = {
-    "Data Siphon": DATA_SIPHON,
-    "Firewall Bash": FIREWALL_BASH,
-    "Encrypt Shield": ENCRYPT_SHIELD,
-    # Add more programs here
-    "Scratch": Program("Scratch", "Physical", 30),
-    "Static Shock": Program("Static Shock", "Worm", 40, effect="paralyze_chance"), # Placeholder effect
-}
-
-# Define World Map
-# Using Location objects imported from location.py
-world_map = {
-    "dark_alley": Location(
-        loc_id="dark_alley",
-        name="Dark Alley",
-        description="A grimy, narrow alley flickering under a broken neon sign advertising 'SynthNoodles'. The air smells of ozone and stale rain.",
-        exits={"north": "market_square"}
-    ),
-    "market_square": Location(
-        loc_id="market_square",
-        name="Market Square",
-        description="A bustling square choked with neon signs, data-hawkers shouting deals, and synth-food stalls emitting questionable steam. A public dataport hub is visible to the east.",
-        exits={"south": "dark_alley", "east": "dataport_hub"},
-        encounter_rate=0.25, # 25% chance of encounter
-        wild_daemons=[
-            {"id": "rat_bot", "min_lvl": 2, "max_lvl": 4},
-            {"id": "glitch_sprite", "min_lvl": 3, "max_lvl": 5}
-        ]
-    ),
-    "dataport_hub": Location(
-        loc_id="dataport_hub",
-        name="Dataport Hub",
-        description="Rows of public access dataports hum with activity. Netrunners jack in and out, their faces illuminated by the glow of virtual interfaces.",
-        exits={"west": "market_square"},
-        encounter_rate=0.1, # Lower chance here
-        wild_daemons=[
-            {"id": "rat_bot", "min_lvl": 1, "max_lvl": 3},
-        ]
-    )
-    # Add more locations later
-}
-
-# --- Helper Functions ---
-
-def create_daemon(daemon_id, level):
-    """Factory function to create Daemon instances from base data."""
-    if daemon_id not in DAEMON_BASE_STATS:
-        print(f"Error: Unknown daemon ID '{daemon_id}'")
-        return None
-
-    base_data = DAEMON_BASE_STATS[daemon_id]
-    # Determine starting programs based on level (very basic example)
-    known_programs = []
-    if daemon_id == "virulet":
-        known_programs.append(PROGRAMS["Data Siphon"])
-        if level >= 4:
-             known_programs.append(PROGRAMS["Scratch"]) # Example of learning a move
-    elif daemon_id == "rat_bot":
-        known_programs.append(PROGRAMS["Scratch"])
-    elif daemon_id == "glitch_sprite":
-        known_programs.append(PROGRAMS["Static Shock"])
-        if level >= 5:
-            known_programs.append(PROGRAMS["Data Siphon"])
-    # Add more logic for other daemons and levels
-
-    # Create the instance
-    daemon = Daemon(
-        name=daemon_id.capitalize(), # Simple name generation
-        types=base_data['types'],
-        base_stats=base_data,
-        level=level,
-        programs=known_programs
-    )
-    return daemon
-
-def display_help():
-    """Prints the available commands."""
-    print("\n--- Available Commands ---")
-    print("  go [direction] - Move (e.g., go north)")
-    print("  look / l       - Describe the current location")
-    print("  status / stat  - Show player status and daemon summary")
-    print("  daemons / d    - Show detailed status of your Daemons")
-    print("  scan           - Look for nearby Daemons (triggers encounter check)")
-    print("  save [name]    - Save the current game state")
-    print("  load [name]    - Load a saved game state")
-    print("  export_data    - Export current game data to files")
-    print("  help / h       - Show this help message")
-    print("  quit           - Exit the game")
-    print("-------------------------")
-
-# --- Combat System (Basic Placeholder) ---
-def start_combat(player, enemy_daemon, world_map):
-    """Initiates and handles the combat loop."""
-    print("\n" + "="*10 + " COMBAT START " + "="*10)
-    print(f"A wild {enemy_daemon.name} (Lv.{enemy_daemon.level}) appears!")
-
-    player_active_daemon = player.get_first_healthy_daemon()
-    if not player_active_daemon:
-        print("You have no active Daemons to fight!")
-        print("="*34)
-        return # End combat immediately if no usable daemon
-
-    print(f"Go, {player_active_daemon.name}!")
-    print("-" * 34)
-
-    combat_over = False
-    while not combat_over:
-        # Display combat status
-        print(f"Your {player_active_daemon.name}: HP {player_active_daemon.stats['hp']}/{player_active_daemon.stats['max_hp']}")
-        print(f"Enemy {enemy_daemon.name}: HP {enemy_daemon.stats['hp']}/{enemy_daemon.stats['max_hp']}") # Approximate HP display?
-        print("-" * 34)
-
-        # Player Turn
-        action_chosen = False
-        while not action_chosen:
-            command_input = input("Combat Action ([F]ight, [S]witch, [R]un): ").lower().strip()
-            verb = command_input.split()[0] if command_input else ""
-
-            if verb == "fight" or verb == "f":
-                # --- Fight Logic ---
-                print("Choose a program:")
-                for i, prog in enumerate(player_active_daemon.programs):
-                    print(f"  {i+1}: {prog.name} (Type: {prog.type}, Power: {prog.power})")
-
-                program_choice = input("Program number: ")
-                try:
-                    choice_index = int(program_choice) - 1
-                    if 0 <= choice_index < len(player_active_daemon.programs):
-                        chosen_program = player_active_daemon.programs[choice_index]
-                        print(f"{player_active_daemon.name} uses {chosen_program.name}!")
-                        # TODO: Implement damage calculation (needs type chart)
-                        damage = chosen_program.power // 2 # Very basic placeholder damage
-                        enemy_daemon.take_damage(damage)
-                        action_chosen = True
+    logging.info("Game starting up")
+    
+    # Initialize game data and get starting location
+    start_location = initialize_game()
+    
+    # Welcome message
+    print("\n" + "=" * 60)
+    print("Welcome to CNRD - Cyber Network Roguelike with Daemons")
+    print("=" * 60)
+    
+    # Create player
+    player_name = input("\nEnter your username: ")
+    
+    # Try to load saved game
+    player_data = data_manager.load_game(player_name.lower())
+    
+    if player_data:
+        # Create player from saved data
+        player = Player.from_dict(player_data)
+        print(f"Welcome back, {player.name}!")
+    else:
+        # Create new player
+        print(f"\nCreating new profile for {player_name}...")
+        
+        # Choose starting daemon
+        print("\nChoose your starting daemon:")
+        print("1. Virulet (Virus type - balanced)")
+        print("2. Pyrowall (Firewall type - high defense)")
+        print("3. Aquabyte (Crypto type - balanced)")
+        
+        valid_choice = False
+        starter_daemon = None
+        
+        while not valid_choice:
+            choice = input("\nEnter your choice (1-3): ")
+            
+            if choice == "1":
+                starter_daemon = create_daemon("virulet", level=5)
+                valid_choice = True
+            elif choice == "2":
+                starter_daemon = create_daemon("pyrowall", level=5)
+                valid_choice = True
+            elif choice == "3":
+                starter_daemon = create_daemon("aquabyte", level=5)
+                valid_choice = True
+            else:
+                print("Invalid choice, please try again.")
+        
+        # Create new player
+        player = Player(player_name, start_location, [starter_daemon])
+        print(f"\nWelcome, {player.name}! You've chosen {starter_daemon.name} as your starting daemon.")
+    
+    # Game loop
+    playing = True
+    while playing:
+        # Get current location
+        current_loc = player.location
+        location = world_map[current_loc]
+        
+        # Display location info
+        print("\n" + "=" * 60)
+        print(f"Location: {location['name']}")
+        print(location['description'])
+        print("=" * 60)
+        
+        # Show available exits
+        print("\nAvailable directions:")
+        for direction, destination in location['exits'].items():
+            dest_name = world_map[destination]['name']
+            print(f"- {direction.capitalize()}: {dest_name}")
+        
+        # Player commands
+        print("\nCommands: move, status, save, quit")
+        command = input("\nWhat would you like to do? ").lower()
+        
+        if command == "move":
+            direction = input("Which direction? ").lower()
+            
+            if direction in location['exits']:
+                # Move player
+                new_location = location['exits'][direction]
+                player.location = new_location
+                print(f"Moving {direction} to {world_map[new_location]['name']}...")
+                
+                # Random encounter check
+                if random.randint(1, 100) <= world_map[new_location]['encounter_rate']:
+                    # Wild daemon encounter
+                    wild_daemon_names = list(DAEMON_BASE_STATS.keys())
+                    wild_daemon_name = random.choice(wild_daemon_names)
+                    wild_daemon = create_daemon(wild_daemon_name, level=random.randint(1, 10))
+                    
+                    print(f"\nA wild {wild_daemon.name} appeared!")
+                    
+                    # Combat options
+                    print("\nWhat will you do?")
+                    print("1. Fight")
+                    print("2. Run")
+                    
+                    combat_choice = input("Enter your choice (1-2): ")
+                    
+                    if combat_choice == "1":
+                        print("\nFighting not fully implemented yet.")
+                        # Here would be the combat system
+                        
+                        # Temporarily, add the wild daemon to player's collection
+                        print(f"You've captured {wild_daemon.name}!")
+                        player.add_daemon(wild_daemon)
                     else:
-                        print("Invalid program number.")
-                except ValueError:
-                    print("Invalid input. Please enter a number.")
-
-            elif verb == "switch" or verb == "s":
-                 # --- Switch Logic ---
-                 print("Choose a Daemon to switch to:")
-                 healthy_daemons = player.get_healthy_daemons()
-                 available_switches = [d for d in healthy_daemons if d != player_active_daemon]
-
-                 if not available_switches:
-                     print("No other healthy Daemons available to switch!")
-                     continue # Ask for action again
-
-                 for i, d in enumerate(available_switches):
-                     print(f"  {i+1}: {d.name} (Lv.{d.level}) HP: {d.stats['hp']}/{d.stats['max_hp']}")
-
-                 switch_choice = input("Switch to number (or 'cancel'): ")
-                 if switch_choice.lower() == 'cancel':
-                     continue
-
-                 try:
-                     choice_index = int(switch_choice) - 1
-                     if 0 <= choice_index < len(available_switches):
-                         player_active_daemon = available_switches[choice_index]
-                         print(f"Come back! Go, {player_active_daemon.name}!")
-                         action_chosen = True # Switching takes the turn
-                     else:
-                         print("Invalid switch number.")
-                 except ValueError:
-                     print("Invalid input. Please enter a number or 'cancel'.")
-
-
-            elif verb == "run" or verb == "r":
-                # --- Run Logic ---
-                print("Attempting to jack out...")
-                # Simple success for prototype against wild
-                print("Successfully escaped!")
-                combat_over = True
-                action_chosen = True # Running counts as the action
-                # No enemy turn if run is successful immediately
-
+                        print("You ran away safely!")
             else:
-                print("Invalid combat command. Choose [F]ight, [S]witch, or [R]un.")
-
-        # Check if combat ended due to running
-        if combat_over:
-            break
-
-        # Check if enemy fainted after player's attack
-        if enemy_daemon.is_fainted():
-            print(f"Enemy {enemy_daemon.name} deactivated!")
-            # Award XP
-            player_active_daemon.add_xp(enemy_daemon.level * 10) # Simple XP formula
-            combat_over = True
-            break
-
-        # Enemy Turn (Very Simple AI)
-        print("-" * 34)
-        if enemy_daemon.programs:
-            enemy_program = random.choice(enemy_daemon.programs)
-            print(f"Enemy {enemy_daemon.name} uses {enemy_program.name}!")
-            # TODO: Implement damage calculation
-            damage = enemy_program.power // 2 # Placeholder
-            player_active_daemon.take_damage(damage)
+                print("You can't go that way.")
+                
+        elif command == "status":
+            print("\n----- Player Status -----")
+            print(f"Name: {player.name}")
+            print(f"Location: {world_map[player.location]['name']}")
+            print("\nDaemons:")
+            
+            for i, daemon in enumerate(player.daemons, 1):
+                print(f"{i}. {daemon.name} (Lvl {daemon.level}) - {daemon.daemon_type} type")
+                
+            # Detailed daemon info
+            if player.daemons:
+                daemon_choice = input("\nEnter daemon number for details (or press Enter to skip): ")
+                
+                if daemon_choice.isdigit():
+                    daemon_idx = int(daemon_choice) - 1
+                    
+                    if 0 <= daemon_idx < len(player.daemons):
+                        selected_daemon = player.daemons[daemon_idx]
+                        
+                        print(f"\n----- {selected_daemon.name} Details -----")
+                        print(f"Type: {selected_daemon.daemon_type}")
+                        print(f"Level: {selected_daemon.level}")
+                        print(f"HP: {selected_daemon.hp}/{selected_daemon.max_hp}")
+                        print(f"Attack: {selected_daemon.attack}")
+                        print(f"Defense: {selected_daemon.defense}")
+                        print(f"Speed: {selected_daemon.speed}")
+                        print(f"Special: {selected_daemon.special}")
+                        
+                        print("\nPrograms:")
+                        for program in selected_daemon.programs:
+                            print(f"- {program.name}: {program.description}")
+                
+        elif command == "save":
+            success = data_manager.save_game(player.to_dict(), player.name.lower())
+            if success:
+                print("Game saved successfully.")
+            else:
+                print("Error saving game.")
+                
+        elif command == "quit":
+            # Ask to save before quitting
+            save_choice = input("Save game before quitting? (y/n): ").lower()
+            
+            if save_choice == "y":
+                success = data_manager.save_game(player.to_dict(), player.name.lower())
+                if success:
+                    print("Game saved successfully.")
+                else:
+                    print("Error saving game.")
+                    
+            print("Thanks for playing CNRD!")
+            playing = False
+            
         else:
-            print(f"Enemy {enemy_daemon.name} doesn't know any programs!")
+            print("Unknown command. Try 'move', 'status', 'save', or 'quit'.")
+    
+    logging.info("Game shutting down")
 
-        # Check if player daemon fainted after enemy's attack
-        if player_active_daemon.is_fainted():
-            print(f"Your {player_active_daemon.name} deactivated!")
-            healthy_daemons = player.get_healthy_daemons()
-            if not healthy_daemons:
-                print("All your Daemons have been deactivated!")
-                print("You blacked out...")
-                # TODO: Handle player loss (return to safe spot, etc.)
-                # For prototype, just end combat
-                combat_over = True
-                # Potentially set a 'game_over' flag here
-            else:
-                # Force player to switch
-                print("You must switch to another Daemon.")
-                switched = False
-                while not switched:
-                    print("Choose a Daemon:")
-                    for i, d in enumerate(healthy_daemons):
-                        print(f"  {i+1}: {d.name} (Lv.{d.level}) HP: {d.stats['hp']}/{d.stats['max_hp']}")
-                    switch_choice = input("Switch to number: ")
-                    try:
-                        choice_index = int(switch_choice) - 1
-                        if 0 <= choice_index < len(healthy_daemons):
-                            player_active_daemon = healthy_daemons[choice_index]
-                            print(f"Go, {player_active_daemon.name}!")
-                            switched = True
-                        else:
-                            print("Invalid switch number.")
-                    except ValueError:
-                        print("Invalid input. Please enter a number.")
-        # End of turn checks done
-
-    # Combat finished
-    print("="*10 + " COMBAT END " + "="*12)
-    # Return to roaming state happens in the main loop
-
-# --- Main Game Function ---
-def main():
-    """Runs the main game loop."""
-    log_file = setup_logging()
-    logging.info("Game started")
-    print(f"Welcome to Cyberpunk NetRunner: Digital Hunters (Prototype)")
-    use_data_files = os.path.exists("data/daemons.json")
-    if use_data_files:
-        logging.info("Loading game data from files...")
-        game_data = load_game_data()
-        global DAEMON_BASE_STATS, PROGRAMS, world_map
-        DAEMON_BASE_STATS = game_data["daemons"]
-        PROGRAMS = {p_name: Program(p_name, p_data["type"], p_data["power"], p_data.get("effect")) for p_name, p_data in game_data["programs"].items()}
-        world_map = {loc_id: Location(loc_id, loc_data["name"], loc_data["description"], loc_data["exits"], loc_data.get("encounter_rate", 0.0), loc_data.get("wild_daemons", [])) for loc_id, loc_data in game_data["locations"].items()}
-    else:
-        logging.info("Using built-in game data...")
-
-    player_name = input("Enter your NetRunner handle: ")
-
-    # Initialize Player
-    player = Player(player_name, "dark_alley", world_map)
-
-    # Give Starter Daemon (Example: Virulet)
-    starter_daemon = create_daemon("virulet", 5)
-    if starter_daemon:
-        player.add_daemon(starter_daemon)
-    else:
-        logging.error("Error: Could not create starter daemon. Exiting.")
-        print("Error: Could not create starter daemon. Exiting.")
-        return
-
-    logging.info(f"Player {player.name} initialized with starter daemon {starter_daemon.name}")
-    print(f"\nWelcome, {player.name}. You find yourself in a dark alley...")
-    print("Type 'help' for a list of commands.")
-
-    game_running = True
-    game_state = "roaming" # Possible states: "roaming", "combat", "game_over"
-
-    while game_running:
-        current_location = player.get_current_location(world_map)
-        if not current_location:
-            logging.critical("Critical Error: Current location is invalid. Exiting.")
-            print("Critical Error: Current location is invalid. Exiting.")
-            break
-
-        if game_state == "roaming":
-            # Display current location at the start of each turn in roaming mode
-            current_location.display()
-
-            # Get player input
-            command_input = input("> ").lower().strip()
-            parts = command_input.split()
-            if not parts:
-                continue # Ask again if empty input
-            verb = parts[0]
-            args = parts[1:] # Arguments provided after the verb
-
-            # Parse and execute command
-            if verb == "quit":
-                logging.info("Player chose to quit the game.")
-                print("Exiting NetRunner...")
-                game_running = False
-            elif verb == "look" or verb == "l":
-                # Already displayed by the start of the loop
-                pass # Or maybe provide more detail on 'look'
-            elif verb == "go":
-                if args:
-                    direction = args[0]
-                    moved_successfully = player.move(direction, world_map)
-                    if moved_successfully:
-                        logging.info(f"Player moved {direction} to {player.get_current_location(world_map).name}")
-                        # Check for encounter after successful move
-                        new_location = player.get_current_location(world_map)
-                        if new_location.encounter_rate > 0 and random.random() < new_location.encounter_rate:
-                            wild_info = new_location.get_random_wild_daemon_info()
-                            if wild_info:
-                                level = random.randint(wild_info['min_lvl'], wild_info['max_lvl'])
-                                enemy_daemon = create_daemon(wild_info['id'], level)
-                                if enemy_daemon:
-                                    logging.info(f"Encountered wild daemon {enemy_daemon.name} (Lv.{enemy_daemon.level})")
-                                    game_state = "combat"
-                                    start_combat(player, enemy_daemon, world_map)
-                                    # After combat, return to roaming
-                                    game_state = "roaming"
-                                    # Re-display location info after combat ends
-                                    player.get_current_location(world_map).display()
-                                else:
-                                    logging.error(f"Error creating wild daemon {wild_info['id']}")
-                                    print(f"Error creating wild daemon {wild_info['id']}")
-                else:
-                    print("Go where? (e.g., go north)")
-            elif verb == "status" or verb == "stat":
-                 player.display_status(world_map)
-            elif verb == "daemons" or verb == "d":
-                 player.display_detailed_daemons()
-            elif verb == "help" or verb == "h":
-                 display_help()
-            elif verb == "scan":
-                 print("Scanning the area...")
-                 # Explicitly trigger encounter check based on current location
-                 if current_location.encounter_rate > 0 and random.random() < (current_location.encounter_rate * 2.0): # Higher chance on scan?
-                     wild_info = current_location.get_random_wild_daemon_info()
-                     if wild_info:
-                         level = random.randint(wild_info['min_lvl'], wild_info['max_lvl'])
-                         enemy_daemon = create_daemon(wild_info['id'], level)
-                         if enemy_daemon:
-                             logging.info(f"Scan detected wild daemon {enemy_daemon.name} (Lv.{enemy_daemon.level})")
-                             print("Scan detected a digital entity!")
-                             game_state = "combat"
-                             start_combat(player, enemy_daemon, world_map)
-                             game_state = "roaming"
-                             player.get_current_location(world_map).display()
-                         else:
-                             logging.error(f"Error creating wild daemon {wild_info['id']}")
-                             print(f"Error creating wild daemon {wild_info['id']}")
-                     else:
-                         print("...but found nothing.")
-                 else:
-                     print("...found nothing unusual.")
-            elif verb == "save":
-                if args:
-                    save_name = args[0]
-                    save_game(player, world_map, save_name)
-                    logging.info(f"Game saved as {save_name}")
-                else:
-                    print("Please provide a save name (e.g., save mygame)")
-            elif verb == "load":
-                if args:
-                    save_name = args[0]
-                    loaded_player = load_save(save_name, world_map)
-                    if loaded_player:
-                        player = loaded_player
-                        logging.info(f"Game loaded from {save_name}")
-                else:
-                    print("Please provide a save name (e.g., load mygame)")
-            elif verb == "export_data":
-                export_current_data(world_map, DAEMON_BASE_STATS, PROGRAMS)
-                logging.info("Game data exported")
-
-            # --- Placeholder for Combat/Other Actions ---
-            # elif verb == "fight": # Combat is triggered by scan/random encounters now
-            #     print("You need to encounter a Daemon first (try 'scan').")
-            else:
-                print(f"Unknown command: '{verb}'. Type 'help' for options.")
-
-        elif game_state == "combat":
-            # The combat loop is handled within start_combat function now
-            # This state might be used for more complex transitions if needed later
-            pass # Should transition back to roaming after combat
-
-        elif game_state == "game_over":
-            logging.info("Game Over.")
-            print("Game Over.") # Add more detail later
-            game_running = False
-
-    logging.info("Game ended")
-    print("\nThanks for playing!")
-
-# --- Run the Game ---
 if __name__ == "__main__":
     main()
