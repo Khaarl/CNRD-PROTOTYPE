@@ -33,17 +33,19 @@ class Player:
 
         if direction in current_loc.exits:
             destination_id = current_loc.exits[direction]
+            # Check if the destination exists in the map *after* confirming the exit exists
             if destination_id in world_map:
                 self.current_location_id = destination_id
-                print(f"You move {direction}.")
+                # print(f"You move {direction}.") # Removed print for curses compatibility
                 # Return True to indicate successful movement, potentially triggering encounters
                 return True
             else:
-                # This case should ideally not happen if the world map is consistent
-                print(f"Error: Destination location ID '{destination_id}' not found.")
+                # This case means the exit points to a non-existent location ID
+                # print(f"Error: Destination location ID '{destination_id}' not found.") # Keep print for critical errors? Or log?
                 return False
         else:
-            print("You can't go that way.")
+            # This means the direction itself is not a valid exit from the current location
+            # print("You can't go that way.") # Removed print for curses compatibility
             return False
 
     def add_daemon(self, daemon_instance):
@@ -51,9 +53,12 @@ class Player:
         # Add checks for roster size limit later
         if isinstance(daemon_instance, Daemon):
             self.daemons.append(daemon_instance)
-            print(f"{daemon_instance.name} added to your roster.")
+            # print(f"{daemon_instance.name} added to your roster.") # Removed print for curses compatibility
+            # Caller should add message to log if needed
         else:
-            print("Error: Attempted to add invalid object as Daemon.")
+            # print("Error: Attempted to add invalid object as Daemon.") # Removed print
+            # Consider logging this error differently
+            pass # Or raise an error
 
     def get_healthy_daemons(self):
         """Returns a list of Daemons in the roster that are not fainted."""

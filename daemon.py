@@ -77,9 +77,10 @@ class Daemon:
         self.stats['hp'] -= damage
         if self.stats['hp'] < 0:
             self.stats['hp'] = 0
-        print(f"{self.name} took {damage} damage! Remaining HP: {self.stats['hp']}/{self.stats['max_hp']}")
+        # print(f"{self.name} took {damage} damage! Remaining HP: {self.stats['hp']}/{self.stats['max_hp']}") # Removed print
         if self.is_fainted():
-            print(f"{self.name} has been deactivated!")
+            # print(f"{self.name} has been deactivated!") # Removed print
+            pass # Caller should handle messaging
 
     def heal(self, amount):
         """Heals the Daemon's HP."""
@@ -87,58 +88,65 @@ class Daemon:
         self.stats['hp'] += heal_amount
         if self.stats['hp'] > self.stats['max_hp']:
             self.stats['hp'] = self.stats['max_hp']
-        print(f"{self.name} recovered {heal_amount} HP. Current HP: {self.stats['hp']}/{self.stats['max_hp']}")
+        # print(f"{self.name} recovered {heal_amount} HP. Current HP: {self.stats['hp']}/{self.stats['max_hp']}") # Removed print
 
     def display_summary(self):
-        """Prints a basic summary of the Daemon."""
-        print(f"--- {self.name} (Lv.{self.level}) ---")
-        print(f"  Type(s): {', '.join(self.types)}")
-        print(f"  HP: {self.stats['hp']}/{self.stats['max_hp']}")
-        print(f"  Stats: Atk={self.stats['attack']}, Def={self.stats['defense']}, Spd={self.stats['speed']}")
-        print(f"  XP: {self.xp}/{self.xp_next_level}")
-        program_names = [p.name for p in self.programs]
-        print(f"  Programs: {', '.join(program_names) if program_names else 'None'}")
-        if self.status_effect:
-            print(f"  Status: {self.status_effect}")
-        print("-" * (len(self.name) + 12))
+        """Prints a basic summary of the Daemon. (Primarily for non-curses debugging)."""
+        # print(f"--- {self.name} (Lv.{self.level}) ---")
+        # print(f"  Type(s): {', '.join(self.types)}")
+        # print(f"  HP: {self.stats['hp']}/{self.stats['max_hp']}")
+        # print(f"  Stats: Atk={self.stats['attack']}, Def={self.stats['defense']}, Spd={self.stats['speed']}")
+        # print(f"  XP: {self.xp}/{self.xp_next_level}")
+        # program_names = [p.name for p in self.programs]
+        # print(f"  Programs: {', '.join(program_names) if program_names else 'None'}")
+        # if self.status_effect:
+        #     print(f"  Status: {self.status_effect}")
+        # print("-" * (len(self.name) + 12))
+        pass # Curses UI handles display
 
     def add_xp(self, amount):
         """Adds XP and checks for level up."""
         if self.is_fainted(): # Can't gain XP if fainted
-             print(f"{self.name} is deactivated and cannot gain XP.")
-             return
+             # print(f"{self.name} is deactivated and cannot gain XP.") # Removed print
+             return False # Indicate no XP gained
         if self.level >= 100: # Assuming level cap
-             print(f"{self.name} is at max level!")
-             return
+             # print(f"{self.name} is at max level!") # Removed print
+             return False # Indicate no XP gained
 
         self.xp += amount
-        print(f"{self.name} gained {amount} XP!")
+        # print(f"{self.name} gained {amount} XP!") # Removed print
+        leveled_up = False
         while self.xp >= self.xp_next_level and self.level < 100:
              self.level_up()
+             leveled_up = True
+        return leveled_up # Return true if a level up occurred
 
     def level_up(self):
         """Handles the level-up process."""
         self.level += 1
         # Remove XP needed for the level just gained
-        # Important: Check if xp is still >= next level's requirement *after* subtracting
-        xp_needed_for_prev_level = self.xp_next_level
+        xp_needed_for_prev_level = self.xp_next_level # Store threshold before recalculating
         self.xp -= xp_needed_for_prev_level
+        if self.xp < 0: self.xp = 0 # Prevent negative XP
 
-        print(f"{self.name} grew to Level {self.level}!")
+        # print(f"{self.name} grew to Level {self.level}!") # Removed print
 
         # Recalculate stats and update next level XP threshold
         old_max_hp = self.stats['max_hp']
-        self.stats = self._calculate_stats()
+        old_hp = self.stats['hp'] # Store current HP before recalculating stats
+        new_stats = self._calculate_stats() # Calculate new stats
+        hp_increase = new_stats['max_hp'] - old_max_hp
+        self.stats = new_stats # Assign new stats
+        # Restore HP based on the increase in max_hp, maintaining current HP if possible
+        self.stats['hp'] = min(self.stats['max_hp'], old_hp + hp_increase)
+
         self.xp_next_level = self._calculate_xp_needed(self.level)
 
-        # Restore HP by the amount max HP increased (like Pokémon)
-        hp_increase = self.stats['max_hp'] - old_max_hp
-        self.heal(hp_increase) # Use heal method for consistency
-
-        self.display_summary() # Show new stats
+        # self.display_summary() # Removed print
 
         # Add logic here later to check for learning new programs at certain levels
         # Example: self.check_learn_new_program()
+        # Return value could indicate if new program was learned
 
 # --- Example Daemon Creation (for testing if run directly) ---
 if __name__ == "__main__":
