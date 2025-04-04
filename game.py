@@ -1,10 +1,12 @@
 import random
 import sys # For exiting the game
+import os # For checking file existence
 
 # Import classes from other files
 from location import Location
 from player import Player
 from daemon import Daemon, Program, DATA_SIPHON, FIREWALL_BASH, ENCRYPT_SHIELD # Import example programs
+from data_manager import load_game_data, save_game, load_save, export_current_data
 
 # --- Game Data ---
 
@@ -102,11 +104,9 @@ def display_help():
     print("  status / stat  - Show player status and daemon summary")
     print("  daemons / d    - Show detailed status of your Daemons")
     print("  scan           - Look for nearby Daemons (triggers encounter check)")
-    # print("  fight          - (Currently initiated by 'scan' or random encounters)")
-    # print("  capture        - (Used during combat)")
-    # print("  use [program] (on [target]) - (Used during combat)")
-    # print("  switch [daemon number/name] - (Used during combat)")
-    # print("  run            - (Used during combat)")
+    print("  save [name]    - Save the current game state")
+    print("  load [name]    - Load a saved game state")
+    print("  export_data    - Export current game data to files")
     print("  help / h       - Show this help message")
     print("  quit           - Exit the game")
     print("-------------------------")
@@ -264,6 +264,16 @@ def start_combat(player, enemy_daemon, world_map):
 def main():
     """Runs the main game loop."""
     print("Welcome to Cyberpunk NetRunner: Digital Hunters (Prototype)")
+    use_data_files = os.path.exists("data/daemons.json")
+    if use_data_files:
+        print("Loading game data from files...")
+        game_data = load_game_data()
+        DAEMON_BASE_STATS = game_data["daemons"]
+        PROGRAMS = {p_name: Program(p_name, p_data["type"], p_data["power"], p_data.get("effect")) for p_name, p_data in game_data["programs"].items()}
+        world_map = {loc_id: Location(loc_id, loc_data["name"], loc_data["description"], loc_data["exits"], loc_data.get("encounter_rate", 0.0), loc_data.get("wild_daemons", [])) for loc_id, loc_data in game_data["locations"].items()}
+    else:
+        print("Using built-in game data...")
+
     player_name = input("Enter your NetRunner handle: ")
 
     # Initialize Player
@@ -357,6 +367,22 @@ def main():
                          print("...but found nothing.")
                  else:
                      print("...found nothing unusual.")
+            elif verb == "save":
+                if args:
+                    save_name = args[0]
+                    save_game(player, world_map, save_name)
+                else:
+                    print("Please provide a save name (e.g., save mygame)")
+            elif verb == "load":
+                if args:
+                    save_name = args[0]
+                    loaded_player = load_save(save_name, world_map)
+                    if loaded_player:
+                        player = loaded_player
+                else:
+                    print("Please provide a save name (e.g., load mygame)")
+            elif verb == "export_data":
+                export_current_data(world_map, DAEMON_BASE_STATS, PROGRAMS)
 
             # --- Placeholder for Combat/Other Actions ---
             # elif verb == "fight": # Combat is triggered by scan/random encounters now
