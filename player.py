@@ -2,6 +2,7 @@
 # from location import Location
 # Assuming Daemon class is imported
 from daemon import Daemon
+import logging
 
 class Player:
     """Represents the player character."""
@@ -19,15 +20,24 @@ class Player:
         # Add inventory, currency, etc. later
         # self.inventory = {}
         # self.creds = 100
+        
+        # Validate location ID
+        if start_location_id not in world_map:
+            logging.error(f"Invalid start location ID: {start_location_id}")
+            raise ValueError(f"Invalid start location ID: {start_location_id}")
 
     def get_current_location(self, world_map):
         """Returns the Location object corresponding to the player's current location ID."""
-        return world_map.get(self.current_location_id)
+        location = world_map.get(self.current_location_id)
+        if not location:
+            logging.error(f"Invalid location ID: {self.current_location_id}")
+        return location
 
     def move(self, direction, world_map):
         """Attempts to move the player in a given direction."""
         current_loc = self.get_current_location(world_map)
         if not current_loc:
+            logging.error("Error: Player's current location not found in world map.")
             print("Error: Player's current location not found in world map.")
             return False # Cannot move if current location is invalid
 
@@ -40,6 +50,7 @@ class Player:
                 return True
             else:
                 # This case should ideally not happen if the world map is consistent
+                logging.error(f"Error: Destination location ID '{destination_id}' not found.")
                 print(f"Error: Destination location ID '{destination_id}' not found.")
                 return False
         else:
@@ -53,6 +64,7 @@ class Player:
             self.daemons.append(daemon_instance)
             print(f"{daemon_instance.name} added to your roster.")
         else:
+            logging.error("Error: Attempted to add invalid object as Daemon.")
             print("Error: Attempted to add invalid object as Daemon.")
 
     def get_healthy_daemons(self):

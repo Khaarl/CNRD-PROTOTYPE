@@ -1,12 +1,41 @@
 import random
 import sys # For exiting the game
 import os # For checking file existence
+import logging
+from datetime import datetime
 
 # Import classes from other files
 from location import Location
 from player import Player
 from daemon import Daemon, Program, DATA_SIPHON, FIREWALL_BASH, ENCRYPT_SHIELD # Import example programs
 from data_manager import load_game_data, save_game, load_save, export_current_data
+
+# --- Set up logging ---
+def setup_logging():
+    """Configure logging for the game"""
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"cnrd_log_{timestamp}.log")
+    
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.DEBUG,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Add console handler for INFO level and above
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(message)s')  # Simpler format for console
+    console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
+    
+    logging.info("Logging system initialized")
+    return log_file
 
 # --- Game Data ---
 
@@ -263,16 +292,19 @@ def start_combat(player, enemy_daemon, world_map):
 # --- Main Game Function ---
 def main():
     """Runs the main game loop."""
-    print("Welcome to Cyberpunk NetRunner: Digital Hunters (Prototype)")
+    log_file = setup_logging()
+    logging.info("Game started")
+    print(f"Welcome to Cyberpunk NetRunner: Digital Hunters (Prototype)")
     use_data_files = os.path.exists("data/daemons.json")
     if use_data_files:
-        print("Loading game data from files...")
+        logging.info("Loading game data from files...")
         game_data = load_game_data()
+        global DAEMON_BASE_STATS, PROGRAMS, world_map
         DAEMON_BASE_STATS = game_data["daemons"]
         PROGRAMS = {p_name: Program(p_name, p_data["type"], p_data["power"], p_data.get("effect")) for p_name, p_data in game_data["programs"].items()}
         world_map = {loc_id: Location(loc_id, loc_data["name"], loc_data["description"], loc_data["exits"], loc_data.get("encounter_rate", 0.0), loc_data.get("wild_daemons", [])) for loc_id, loc_data in game_data["locations"].items()}
     else:
-        print("Using built-in game data...")
+        logging.info("Using built-in game data...")
 
     player_name = input("Enter your NetRunner handle: ")
 
@@ -284,9 +316,11 @@ def main():
     if starter_daemon:
         player.add_daemon(starter_daemon)
     else:
+        logging.error("Error: Could not create starter daemon. Exiting.")
         print("Error: Could not create starter daemon. Exiting.")
         return
 
+    logging.info(f"Player {player.name} initialized with starter daemon {starter_daemon.name}")
     print(f"\nWelcome, {player.name}. You find yourself in a dark alley...")
     print("Type 'help' for a list of commands.")
 
@@ -296,6 +330,7 @@ def main():
     while game_running:
         current_location = player.get_current_location(world_map)
         if not current_location:
+            logging.critical("Critical Error: Current location is invalid. Exiting.")
             print("Critical Error: Current location is invalid. Exiting.")
             break
 
@@ -313,6 +348,7 @@ def main():
 
             # Parse and execute command
             if verb == "quit":
+                logging.info("Player chose to quit the game.")
                 print("Exiting NetRunner...")
                 game_running = False
             elif verb == "look" or verb == "l":
@@ -323,6 +359,7 @@ def main():
                     direction = args[0]
                     moved_successfully = player.move(direction, world_map)
                     if moved_successfully:
+                        logging.info(f"Player moved {direction} to {player.get_current_location(world_map).name}")
                         # Check for encounter after successful move
                         new_location = player.get_current_location(world_map)
                         if new_location.encounter_rate > 0 and random.random() < new_location.encounter_rate:
@@ -331,6 +368,7 @@ def main():
                                 level = random.randint(wild_info['min_lvl'], wild_info['max_lvl'])
                                 enemy_daemon = create_daemon(wild_info['id'], level)
                                 if enemy_daemon:
+                                    logging.info(f"Encountered wild daemon {enemy_daemon.name} (Lv.{enemy_daemon.level})")
                                     game_state = "combat"
                                     start_combat(player, enemy_daemon, world_map)
                                     # After combat, return to roaming
@@ -338,6 +376,7 @@ def main():
                                     # Re-display location info after combat ends
                                     player.get_current_location(world_map).display()
                                 else:
+                                    logging.error(f"Error creating wild daemon {wild_info['id']}")
                                     print(f"Error creating wild daemon {wild_info['id']}")
                 else:
                     print("Go where? (e.g., go north)")
@@ -356,12 +395,14 @@ def main():
                          level = random.randint(wild_info['min_lvl'], wild_info['max_lvl'])
                          enemy_daemon = create_daemon(wild_info['id'], level)
                          if enemy_daemon:
+                             logging.info(f"Scan detected wild daemon {enemy_daemon.name} (Lv.{enemy_daemon.level})")
                              print("Scan detected a digital entity!")
                              game_state = "combat"
                              start_combat(player, enemy_daemon, world_map)
                              game_state = "roaming"
                              player.get_current_location(world_map).display()
                          else:
+                             logging.error(f"Error creating wild daemon {wild_info['id']}")
                              print(f"Error creating wild daemon {wild_info['id']}")
                      else:
                          print("...but found nothing.")
@@ -371,6 +412,7 @@ def main():
                 if args:
                     save_name = args[0]
                     save_game(player, world_map, save_name)
+                    logging.info(f"Game saved as {save_name}")
                 else:
                     print("Please provide a save name (e.g., save mygame)")
             elif verb == "load":
@@ -379,10 +421,12 @@ def main():
                     loaded_player = load_save(save_name, world_map)
                     if loaded_player:
                         player = loaded_player
+                        logging.info(f"Game loaded from {save_name}")
                 else:
                     print("Please provide a save name (e.g., load mygame)")
             elif verb == "export_data":
                 export_current_data(world_map, DAEMON_BASE_STATS, PROGRAMS)
+                logging.info("Game data exported")
 
             # --- Placeholder for Combat/Other Actions ---
             # elif verb == "fight": # Combat is triggered by scan/random encounters now
@@ -396,9 +440,11 @@ def main():
             pass # Should transition back to roaming after combat
 
         elif game_state == "game_over":
+            logging.info("Game Over.")
             print("Game Over.") # Add more detail later
             game_running = False
 
+    logging.info("Game ended")
     print("\nThanks for playing!")
 
 # --- Run the Game ---
