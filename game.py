@@ -22,7 +22,7 @@ def initialize_game():
     world_map = world_data["locations"]
     
     logging.info("Game initialized with data from config files")
-    return world_data["start_location"]
+    return world_data["start_location"], world_map
 
 def create_daemon(daemon_name, level=1):
     """Create a new daemon object from the base stats"""
@@ -77,7 +77,7 @@ def main():
     logging.info("Game starting up")
     
     # Initialize game data and get starting location
-    start_location = initialize_game()
+    start_location, world_map = initialize_game()
     
     # Welcome message
     print("\n" + "=" * 60)
@@ -131,6 +131,15 @@ def main():
     while playing:
         # Get current location
         current_loc = player.location
+        
+        # Verify the location exists in world map
+        if current_loc not in world_map:
+            logging.error(f"Invalid location ID: {current_loc}")
+            print(f"Error: Invalid location ID '{current_loc}'. Moving to start location.")
+            player.location = start_location
+            current_loc = start_location
+        
+        # Get location data
         location = world_map[current_loc]
         
         # Display location info

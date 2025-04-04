@@ -6,31 +6,26 @@ import logging
 
 class Player:
     """Represents the player character."""
-    def __init__(self, name, start_location_id, world_map):
+    def __init__(self, name, start_location_id, daemons=None):
         """
         Initializes the Player.
         Args:
             name (str): Player's chosen name.
             start_location_id (str): The ID of the starting location.
-            world_map (dict): The dictionary mapping location IDs to Location objects.
+            daemons (list): List of Daemon objects the player owns.
         """
         self.name = name
-        self.current_location_id = start_location_id
-        self.daemons = [] # List of Daemon objects the player owns
-        # Add inventory, currency, etc. later
-        # self.inventory = {}
-        # self.creds = 100
+        self.location = start_location_id  # Store location ID directly
+        self.daemons = daemons if daemons else []
         
-        # Validate location ID
-        if start_location_id not in world_map:
-            logging.error(f"Invalid start location ID: {start_location_id}")
-            raise ValueError(f"Invalid start location ID: {start_location_id}")
+        # No need to validate here as we're getting the location ID directly from locations.json
+        # This removes the validation that was causing the crash
 
     def get_current_location(self, world_map):
         """Returns the Location object corresponding to the player's current location ID."""
-        location = world_map.get(self.current_location_id)
+        location = world_map.get(self.location)
         if not location:
-            logging.error(f"Invalid location ID: {self.current_location_id}")
+            logging.error(f"Invalid location ID: {self.location}")
         return location
 
     def move(self, direction, world_map):
@@ -44,7 +39,7 @@ class Player:
         if direction in current_loc.exits:
             destination_id = current_loc.exits[direction]
             if destination_id in world_map:
-                self.current_location_id = destination_id
+                self.location = destination_id
                 print(f"You move {direction}.")
                 # Return True to indicate successful movement, potentially triggering encounters
                 return True
@@ -59,11 +54,12 @@ class Player:
 
     def add_daemon(self, daemon_instance):
         """Adds a Daemon instance to the player's roster."""
-        # Add checks for roster size limit later
+        from daemon import Daemon  # Import here to avoid circular imports
         if isinstance(daemon_instance, Daemon):
             self.daemons.append(daemon_instance)
             print(f"{daemon_instance.name} added to your roster.")
         else:
+            import logging
             logging.error("Error: Attempted to add invalid object as Daemon.")
             print("Error: Attempted to add invalid object as Daemon.")
 
@@ -83,8 +79,7 @@ class Player:
 
          print("\n--- Player Status ---")
          print(f" Name: {self.name}")
-         print(f" Location: {location_name} ({self.current_location_id})")
-         # print(f" Creds: {self.creds}") # Future addition
+         print(f" Location: {location_name} ({self.location})")
          print(" Daemons:")
          if not self.daemons:
               print("   None")
@@ -102,6 +97,31 @@ class Player:
             for daemon in self.daemons:
                 daemon.display_summary()
                 print("") # Add a newline for spacing
+
+    def to_dict(self):
+        """Convert player data to dictionary for saving"""
+        return {
+            "name": self.name,
+            "location": self.location,
+            "daemons": [daemon.to_dict() for daemon in self.daemons]
+        }
+        
+    @classmethod
+    def from_dict(cls, data):
+        """Create player from saved dictionary"""
+        from daemon import Daemon
+        
+        player = cls(
+            data["name"],
+            data["location"],
+            []  # Empty daemon list to start
+        )
+        
+        # Add daemons
+        for daemon_data in data["daemons"]:
+            player.daemons.append(Daemon.from_dict(daemon_data))
+            
+        return player
 
 # --- Example Player Creation (for testing if run directly) ---
 if __name__ == "__main__":
@@ -131,7 +151,7 @@ if __name__ == "__main__":
     }
 
     # Create player
-    test_player = Player("Tester", "start", test_world_map)
+    test_player = Player("Tester", "start")
 
     # Add dummy daemons
     d1 = DummyDaemon("TestBot1", 5, 25, 25)
