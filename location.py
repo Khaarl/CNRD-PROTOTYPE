@@ -18,7 +18,7 @@ class Location:
             wild_daemons (list[dict]): List of possible wild Daemons in this area.
                                        Each dict specifies 'id' and level range ('min_lvl', 'max_lvl').
                                        Example: [{"id": "rat_bot", "min_lvl": 2, "max_lvl": 4}]
-            scan_encounter_rate (float): Probability of encounter when scanning. Defaults to 1.5x encounter_rate.
+            scan_encounter_rate (float): Probability of encounter when scanning. Defaults to 2x encounter_rate.
         """
         self.id = loc_id
         self.name = name
@@ -27,11 +27,12 @@ class Location:
         self.encounter_rate = encounter_rate
         self.wild_daemons = wild_daemons if wild_daemons else []
         
-        # Set scan_encounter_rate to provided value or default to 1.5x normal encounter rate (capped at 1.0)
+        # Set scan_encounter_rate to provided value or default to 2x normal encounter rate (with minimum 0.6)
         if scan_encounter_rate is not None:
             self.scan_encounter_rate = scan_encounter_rate
         else:
-            self.scan_encounter_rate = min(1.0, encounter_rate * 1.5)
+            # Default scan encounter is at least 60% or double the normal rate, whichever is higher
+            self.scan_encounter_rate = max(0.6, encounter_rate * 2.0)
         
         # Add potential for NPCs, items, events later
         # self.npcs = []

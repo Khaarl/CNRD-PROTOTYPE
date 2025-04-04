@@ -621,7 +621,7 @@ def main(): # Explicitly ensure zero indentation
                 print("  None")
 
             # Player commands
-            print("\nCommands: move [direction], scan, status, daemons, save, quit")
+            print("\nCommands: move [direction], scan, train, status, daemons, save, quit")
             command_input = input("\nWhat would you like to do? ").lower().strip()
             parts = command_input.split()
             if not parts: continue
@@ -668,6 +668,80 @@ def main(): # Explicitly ensure zero indentation
                 else:
                     print("You can't go that way.")
 
+            elif command == "train":
+                # Training fight implementation
+                print("\nInitiating training session...")
+                
+                # Check if player has at least one healthy daemon
+                if not player.get_active_daemon():
+                    print("You need at least one conscious daemon to train!")
+                    continue
+                
+                # Get all available enemy daemon types from the game data
+                available_daemons = list(DAEMON_BASE_STATS.keys())
+                if not available_daemons:
+                    print("No training daemons available in the system.")
+                    logging.error("No daemons found in DAEMON_BASE_STATS for training.")
+                    continue
+                
+                # Player can choose difficulty level
+                print("\nSelect training difficulty:")
+                print("1. Easy (Level 1-3)")
+                print("2. Medium (Level 4-7)")
+                print("3. Hard (Level 8-12)")
+                
+                difficulty_choice = input("> ").strip()
+                
+                # Set level range based on difficulty
+                if difficulty_choice == "1":
+                    min_level, max_level = 1, 3
+                elif difficulty_choice == "2":
+                    min_level, max_level = 4, 7
+                elif difficulty_choice == "3":
+                    min_level, max_level = 8, 12
+                else:
+                    print("Invalid choice. Defaulting to medium difficulty.")
+                    min_level, max_level = 4, 7
+                
+                # Let player choose daemon type or random
+                print("\nChoose opponent daemon type:")
+                for i, daemon_id in enumerate(available_daemons[:10]):  # Limit to first 10 for readability
+                    daemon_name = DAEMON_BASE_STATS[daemon_id].get("name", daemon_id)
+                    daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
+                    print(f"{i+1}. {daemon_name} ({daemon_type})")
+                print(f"{len(available_daemons[:10])+1}. Random")
+                
+                daemon_choice = input("> ").strip()
+                
+                # Parse player's choice
+                selected_daemon_id = None
+                if daemon_choice.isdigit():
+                    choice_idx = int(daemon_choice) - 1
+                    if 0 <= choice_idx < len(available_daemons[:10]):
+                        selected_daemon_id = available_daemons[choice_idx]
+                    elif choice_idx == len(available_daemons[:10]):
+                        selected_daemon_id = random.choice(available_daemons)
+                    else:
+                        selected_daemon_id = random.choice(available_daemons)
+                        print("Invalid choice. Selecting random daemon.")
+                else:
+                    selected_daemon_id = random.choice(available_daemons)
+                    print("Invalid choice. Selecting random daemon.")
+                
+                # Set daemon level
+                level = random.randint(min_level, max_level)
+                
+                # Create the enemy daemon
+                current_enemy_daemon = create_daemon(selected_daemon_id, level)
+                if current_enemy_daemon:
+                    print(f"\nCreating training session with {current_enemy_daemon.name} (Level {level})...")
+                    # Set to combat state
+                    game_state = "combat"
+                    logging.info(f"Training combat initiated with {selected_daemon_id} (Level {level})")
+                else:
+                    print(f"Error: Could not create training daemon '{selected_daemon_id}'.")
+                    logging.error(f"Failed to create training daemon '{selected_daemon_id}'")
+            
             elif command == "scan":
                 print(f"Scanning {location.name}...")
                 
@@ -678,6 +752,15 @@ def main(): # Explicitly ensure zero indentation
                 # Check if this location has wild daemons defined
                 if location.wild_daemons:
                     print("  Daemon signals detected in this area.")
+                    # Display potential daemon types in area
+                    daemon_types = set()
+                    for daemon_info in location.wild_daemons:
+                        daemon_id = daemon_info.get("id")
+                        if daemon_id in DAEMON_BASE_STATS:
+                            daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
+                            daemon_types.add(daemon_type)
+                    if daemon_types:
+                        print(f"  Type signature analysis: {', '.join(daemon_types)}")
                 else:
                     print("  No daemon signals detected in this area.")
                     
@@ -688,9 +771,13 @@ def main(): # Explicitly ensure zero indentation
                         dest_name = world_map[destination_id].name if destination_id in world_map else "Unknown Area"
                         print(f"  {direction.capitalize()} → {dest_name}")
                 
-                # Determine the scan encounter rate (default to location's normal rate * 1.5)
+                # FIXED: Ensure scan_encounter_rate is properly set and higher than normal rate
+                # Default to 60% chance or double the normal rate, whichever is higher
                 scan_encounter_rate = getattr(location, "scan_encounter_rate", 
-                                              min(1.0, location.encounter_rate * 1.5))
+                                             max(0.6, location.encounter_rate * 2.0))
+                
+                # Log the encounter check for debugging
+                logging.info(f"Scan encounter check: rate={scan_encounter_rate}, location={location.name}")
                 
                 # --- Random Encounter Check for Scanning ---
                 if location.wild_daemons and random.random() < scan_encounter_rate:
@@ -708,10 +795,16 @@ def main(): # Explicitly ensure zero indentation
                             current_enemy_daemon = create_daemon(daemon_id, level)
                             if current_enemy_daemon:
                                 game_state = "combat"
+                                # Log successful encounter creation
+                                logging.info(f"Scan triggered encounter with {daemon_id} (Level {level})")
                             else:
                                 logging.error(f"Failed to create wild daemon '{daemon_id}' during scan.")
                     else:
                         logging.info("Scan encounter triggered but no wild_daemons defined or list is empty.")
+                else:
+                    # If no daemon and it's a location that should have them, let player know scan was uneventful
+                    if location.wild_daemons:
+                        print("Your scan completed without triggering any encounters.")
 
             elif command == "status":
                 player.display_status(world_map) # Pass world_map to display location name

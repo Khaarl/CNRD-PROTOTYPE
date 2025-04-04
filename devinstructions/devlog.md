@@ -1,5 +1,37 @@
 # CNRD Development Log
 
+## Version 0.1.6 Implementation - Scan Functionality & Training (2025-04-18)
+
+### Scan Function Improvements
+- Fixed encounter rate calculations for the scan command, making encounters more reliable
+- Implemented improved scan_encounter_rate in Location class with a minimum 60% chance
+- Added detailed daemon type detection when scanning areas with daemons
+- Enhanced scan feedback to show more informative location and exit details
+- Added confirmation message when a scan completes without triggering an encounter
+
+### Training System Implementation
+- Added a new 'train' command to allow players to practice combat on demand
+- Implemented three difficulty levels (Easy, Medium, Hard) with appropriate level ranges
+- Players can select specific daemon types to train against or choose random opponents
+- Training system allows for targeted practice against specific daemon types
+- Added detailed opponent selection interface with daemon type information
+
+### Technical Improvements
+- Improved error handling and logging for scan and combat encounters
+- Added informative debug logging for encounter rate calculations
+- Enhanced type detection system for better daemon information display
+- Code refactored for better readability and maintainability
+- Standardized encounter messaging for consistent player experience
+
+### Planned for Next Update (Version 0.2.0)
+- Implement full NPC trainer system with fixed daemon rosters
+- Add specialized training centers in certain locations
+- Improve combat balance with more sophisticated AI decision making
+- Create an achievement system for tracking combat milestones
+- Implement experience sharing system for inactive daemons
+- Add special rewards for completing training milestones
+- Implement inventory system with healing items and capture tools
+
 ## Version 0.1.5 Implementation - Code Consistency Review (2025-04-12)
 
 ### Code Structure Improvements
