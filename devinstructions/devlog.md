@@ -1,4 +1,43 @@
 # CNRD Development Log
+finally summrise changes into devlog.md, append to existing notes with date timeof entry at the start
+
+## Version 0.1.4 - Bug Fixes and Combat System (2025-04-05)
+
+### Fixed Issues
+- Fixed critical error in combat system where TYPE_CHART and STATUS_EFFECTS were undefined
+- Added proper imports in game.py to reference constants from daemon module
+- Resolved crash in combat type effectiveness calculations
+
+### Technical Improvements
+- Improved code organization with proper module imports
+- Enhanced error recovery in combat system
+- Improved code reuse by properly sharing constants between modules
+
+### Planned for Next Update (Version 0.2.0)
+- Add more wild daemon spawns in different areas
+- Implement NPC trainers with fixed daemon rosters
+- Enhance type effectiveness system with more visual feedback
+- Add inventory system with healing items
+- Implement daemon evolution based on level or special conditions
+- Add new locations with special encounters
+
+## Version 0.1.3 - Code Review and Fixes (Implemented)
+
+### Fixed Issues
+- Added robust error handling for malformed JSON files with detailed error messages
+- Implemented schema validation for configuration files
+  - Added validation for daemon, program, and location schemas
+  - Added fallback to default data when validation fails
+- Fixed critical bug in daemon.to_dict() method causing status_effect serialization issues
+- Fixed bug in Player.display_status() that caused crash when called without world_map
+- Standardized logging approach throughout data_manager.py
+- Added comprehensive unit tests for configuration loading and validation in tests/test_data_manager.py
+
+### Technical Improvements
+- Made error messages more informative with line and column numbers for JSON parsing errors
+- Enhanced Player and Daemon serialization with better error handling
+- Added robust validation for config files before using them
+- Created proper testing framework for future development
 
 ## Version 0.1.2 - Configuration Update
 
