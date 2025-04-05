@@ -4,6 +4,7 @@ import logging
 import json
 from pathlib import Path
 import traceback
+import pygame
 
 # Import game modules
 from player import Player
@@ -11,6 +12,7 @@ from world import World
 from combat import Combat
 from main_menu import MainMenu
 from daemon import Daemon
+from save_screen import SaveScreen
 
 # Configure logging
 def setup_logging():
@@ -36,8 +38,13 @@ class Game:
         self.world = World()
         self.player = None
         self.running = True
+        self.state = "menu"  # States: menu, roaming, combat, pause
         self.save_dir = Path("saves")
         self.save_dir.mkdir(exist_ok=True)
+        
+        # Initialize pygame
+        if not pygame.get_init():
+            pygame.init()
         
     def initialize(self):
         # Initialize the game world
@@ -48,10 +55,16 @@ class Game:
         self.initialize()
         
         # Main game loop
+        self.running = True
+        self.state = "roaming"
+        
         while self.running:
-            self.display_current_location()
-            command = input("\nWhat will you do? > ").strip().lower()
-            self.process_command(command)
+            if self.state == "roaming":
+                self.display_current_location()
+                command = input("\nWhat will you do? > ").strip().lower()
+                self.process_command(command)
+            elif self.state == "save_screen":
+                self.show_save_screen()
             
     def start_new_game(self, player_name):
         """Create a new game with the specified player name"""
@@ -90,19 +103,31 @@ class Game:
         self.save_game()
         
     def load_game(self, save_file_path):
-        """Load a game from the specified save file"""
+        """Load a saved game from a file"""
         try:
-            with open(save_file_path, 'r') as f:
-                save_data = json.load(f)
+            from data_manager import load_game as load_game_from_file
+            player_data = load_game_from_file(save_file_path)
             
-            # Create player from save data
-            self.player = Player.from_dict(save_data, self.world.locations)
+            if not player_data:
+                logging.error(f"Failed to load game data from {save_file_path}")
+                print("Failed to load game. Check the logs for details.")
+                return False
+                
+            # Create player from saved data
+            from player import Player
+            self.player = Player.from_dict(player_data, self.world.locations)
+            
+            logging.info(f"Game loaded successfully for player {self.player.name}")
             print(f"Welcome back, {self.player.name}!")
-            input("Press Enter to continue...")
+            
+            # Set game to roaming state
+            self.state = "roaming"
+            return True
+            
         except Exception as e:
-            logging.error(f"Error loading game: {e}", exc_info=True)
+            logging.error(f"Error during load_game: {e}", exc_info=True)
             print(f"Error loading game: {e}")
-            input("Press Enter to return to main menu...")
+            return False
             
     def start_quick_fight(self):
         """Start a test battle for quick gameplay"""
@@ -194,9 +219,8 @@ class Game:
             self.display_help()
             
         elif command == "save":
-            self.save_game()
-            print("Game saved successfully!")
-            input("Press Enter to continue...")
+            # Switch to save screen
+            self.state = "save_screen"
             
         elif command == "menu":
             self.return_to_menu()
@@ -210,21 +234,38 @@ class Game:
         # Placeholder for encounter system
         pass
         
-    def save_game(self):
+    def show_save_screen(self):
+        """Show the save game screen"""
+        save_screen = SaveScreen(self)
+        result = save_screen.run()
+        
+        # Handle result
+        if result["action"] == "return_to_game":
+            self.state = "roaming"
+        
+    def save_game(self, save_name=None):
         """Save the current game state"""
         if not self.player:
-            return
+            logging.warning("Attempted to save game but no player exists")
+            return False
             
         save_data = self.player.to_dict()
-        save_path = self.save_dir / f"{self.player.name.lower()}.json"
+        if save_name is None:
+            save_name = self.player.name.lower()
         
         try:
-            with open(save_path, 'w') as f:
-                json.dump(save_data, f)
-            logging.info(f"Game saved to {save_path}")
+            from data_manager import save_game as save_game_to_file
+            success = save_game_to_file(save_data, save_name)
+            
+            if success:
+                logging.info(f"Game saved successfully as {save_name}")
+                return True
+            else:
+                logging.error("Failed to save game")
+                return False
         except Exception as e:
-            logging.error(f"Error saving game: {e}", exc_info=True)
-            print(f"Error saving game: {e}")
+            logging.error(f"Error during save_game: {e}", exc_info=True)
+            return False
             
     def display_help(self):
         """Display available commands"""
@@ -244,6 +285,10 @@ class Game:
     def return_to_menu(self):
         """Save and return to main menu"""
         self.save_game()
+        print("Returning to main menu...")
+        # This is where we would return to the main menu, 
+        # but for now just exit as we need to restructure the flow
+        self.running = False
 
 def main():
     """Main entry point for the game"""
@@ -253,6 +298,7 @@ def main():
     try:
         # Initialize game object (minimal initialization for menu)
         game_instance = Game()
+        game_instance.initialize()
         
         # Create and run the main menu
         menu = MainMenu(game_instance)
@@ -268,8 +314,8 @@ def main():
             
         elif menu_result["action"] == "load_game":
             logger.info(f"Loading game from: {menu_result['save_file']}")
-            game_instance.load_game(menu_result["save_file"])
-            game_instance.run()
+            if game_instance.load_game(menu_result["save_file"]):
+                game_instance.run()
             
         elif menu_result["action"] == "quick_fight":
             logger.info("Starting quick fight")

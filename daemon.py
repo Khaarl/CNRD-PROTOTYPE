@@ -422,71 +422,53 @@ class Daemon:
         return result
 
     def to_dict(self):
-        """Convert to dictionary for serialization"""
+        """Convert daemon data to dictionary for saving"""
+        programs_data = [prog.to_dict() for prog in self.programs]
+        
         return {
             "name": self.name,
-            "daemon_type": self.types[0] if len(self.types) > 0 else "UNKNOWN", # For backwards compatibility 
-            "types": self.types, 
             "level": self.level,
-            "base_hp": self.base_hp,
-            "base_attack": self.base_attack,
-            "base_defense": self.base_defense,
-            "base_speed": self.base_speed,
-            "base_special": self.base_special,
-            "capture_rate": self.capture_rate, 
+            "types": self.types,
             "hp": self.hp,
             "max_hp": self.max_hp,
             "attack": self.attack,
             "defense": self.defense,
             "speed": self.speed,
-            "special": self.special,
             "xp": self.xp,
-            "xp_needed": self.xp_needed,
-            "status_effect": self.status_effect, # Fixed - was incorrectly using data.get()
-            "programs": [p.to_dict() for p in self.programs]
+            "xp_next_level": self.xp_next_level,
+            "programs": programs_data,
+            "status_effect": self.status_effect
         }
-
+        
     @classmethod
     def from_dict(cls, data):
-        """Create a Daemon from a dictionary"""
-        # Handle type backward compatibility (list 'types' vs string 'daemon_type')
-        daemon_types = data.get("types")
-        if not isinstance(daemon_types, list) or not daemon_types: # Check if 'types' is missing or not a non-empty list
-            old_type = data.get("daemon_type") # Check for the old key
-            if isinstance(old_type, str):
-                daemon_types = [old_type] # Convert old string to list
-                logging.warning(f"Loaded daemon '{data.get('name')}' using legacy 'daemon_type'. Converted to types: {daemon_types}")
-            else:
-                daemon_types = ["UNKNOWN"] # Default if neither is valid
-                logging.error(f"Could not determine type for daemon '{data.get('name')}'. Defaulting to UNKNOWN.")
-
-        # First create the daemon without programs
+        """Create a Daemon instance from saved dictionary data"""
+        from program import Program
+        
+        # Load programs
+        programs = []
+        for prog_data in data.get("programs", []):
+            program = Program.from_dict(prog_data)
+            programs.append(program)
+        
+        # Create the daemon
         daemon = cls(
-            data["name"],
-            daemon_types, # Use the determined types list
-            data["level"],
-            data["base_hp"],
-            data["base_attack"],
-            data["base_defense"],
-            data["base_speed"],
-            data["base_special"],
-            data.get("capture_rate", 100) # Added capture rate with default
+            name=data.get("name", "Unknown"),
+            types=data.get("types", ["NORMAL"]),
+            level=data.get("level", 1),
+            programs=programs
         )
-
-        # Then add saved values that would be calculated
-        daemon.hp = data["hp"]
-        daemon.max_hp = data["max_hp"]
-        daemon.attack = data["attack"]
-        daemon.defense = data["defense"]
-        daemon.speed = data["speed"]
-        daemon.special = data["special"]
-        daemon.xp = data["xp"]
-        daemon.xp_needed = data["xp_needed"]
-        daemon.status_effect = data.get("status_effect") # Added status effect
-
-        # Add programs
-        daemon.programs = [Program.from_dict(p) for p in data["programs"]]
-
+        
+        # Set stats directly
+        daemon.hp = data.get("hp", 10)
+        daemon.max_hp = data.get("max_hp", 10)
+        daemon.attack = data.get("attack", 5)  
+        daemon.defense = data.get("defense", 5)
+        daemon.speed = data.get("speed", 5)
+        daemon.xp = data.get("xp", 0)
+        daemon.xp_next_level = data.get("xp_next_level", 100)
+        daemon.status_effect = data.get("status_effect", None)
+        
         return daemon
 
 # --- Example Daemon Creation (for testing if run directly) ---

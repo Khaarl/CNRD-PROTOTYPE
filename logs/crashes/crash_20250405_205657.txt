@@ -1,0 +1,24 @@
+==================================================
+CNRD CRASH REPORT
+==================================================
+
+Time: 2025-04-05 20:56:57
+Python version: 3.10.5 (tags/v3.10.5:f377153, Jun  6 2022, 16:14:13) [MSC v.1929 64 bit (AMD64)]
+
+Exception details:
+Type: TypeError
+Message: Daemon.__init__() got an unexpected keyword argument 'daemon_type'
+
+Traceback:
+Traceback (most recent call last):
+  File "D:\PROJECTS\CNRD PROTOTYPE\bootstrap.py", line 54, in run_game_with_error_handling
+    game.main()
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 1190, in main
+    player = create_player_from_save(player_data, start_location_id)
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 593, in create_player_from_save
+    daemon = Daemon(
+TypeError: Daemon.__init__() got an unexpected keyword argument 'daemon_type'
+
+Game State Information:
+game_state: load_game
+in_combat: False

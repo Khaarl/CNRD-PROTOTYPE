@@ -1,0 +1,18 @@
+2025-04-05 20:56:54 - INFO - Logging initialized
+2025-04-05 20:56:54 - INFO - Starting CNRD bootstrap process
+2025-04-05 20:56:54 - WARNING - Dev instruction file main_instructions.txt not found
+2025-04-05 20:56:54 - WARNING - Dev instruction file menu_instructions.txt not found
+2025-04-05 20:56:54 - INFO - Game initialized with data from config files and Location objects created.
+2025-04-05 20:56:55 - INFO - Load game selected
+2025-04-05 20:56:57 - INFO - Game loaded successfully from saves\karl.json
+2025-04-05 20:56:57 - INFO - Successfully loaded save file: karl
+2025-04-05 20:56:57 - CRITICAL - Unhandled exception: Daemon.__init__() got an unexpected keyword argument 'daemon_type'
+Traceback (most recent call last):
+  File "D:\PROJECTS\CNRD PROTOTYPE\bootstrap.py", line 54, in run_game_with_error_handling
+    game.main()
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 1190, in main
+    player = create_player_from_save(player_data, start_location_id)
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 593, in create_player_from_save
+    daemon = Daemon(
+TypeError: Daemon.__init__() got an unexpected keyword argument 'daemon_type'
+2025-04-05 20:56:57 - INFO - Crash report created: logs\crashes\crash_20250405_205657.txt

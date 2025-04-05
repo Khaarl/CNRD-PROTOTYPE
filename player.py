@@ -17,253 +17,139 @@ class Player:
             daemons (list): List of Daemon objects the player owns.
         """
         self.name = name
-        self.location = start_location_id  # Store location ID directly
-        self.daemons = daemons if daemons else []
-        self.inventory = {
-            "Daemon Capture Tool": 5,
-            "Health Kit": 3
-        }
-        self.money = 1000
-        self.reputation = {
-            "NetSec": 0,
-            "DarkNet": 0,
-            "CyberPunks": 0
-        }
-    
+        self.current_location = start_location_id  # Store location ID directly
+        self.daemons = daemons if daemons is not None else []
+        self.credits = 1000  # Starting money
+        self.items = []      # Inventory items
+        
     def create_starter_daemon(self, daemon_type):
-        """Create a starter daemon for the player"""
-        from daemon import Daemon, Program
+        """Create a starter daemon of the specified type"""
+        from daemon import Daemon
+        return Daemon.create_from_base(daemon_type, level=5)
         
-        # Default base stats for starters
-        base_stats = {
-            "virulet": {"hp": 45, "attack": 55, "defense": 40, "speed": 60, "special": 50, "types": ["VIRUS"]},
-            "pyrowall": {"hp": 45, "attack": 45, "defense": 65, "speed": 45, "special": 50, "types": ["FIREWALL"]},
-            "aquabyte": {"hp": 45, "attack": 50, "defense": 50, "speed": 50, "special": 55, "types": ["CRYPTO"]}
-        }
-        
-        stats = base_stats.get(daemon_type.lower())
-        if not stats:
-            # Default to virulet if type not found
-            stats = base_stats["virulet"]
-        
-        # Create starter programs
-        programs = []
-        try:
-            if daemon_type.lower() == "virulet":
-                programs.append(Program(1, "Data Siphon", 40, 95, "VIRUS", "damage", "Drains data from the target"))
-                programs.append(Program(2, "Infect", 30, 100, "VIRUS", "special", "Infects the target with status effects"))
-            elif daemon_type.lower() == "pyrowall":
-                programs.append(Program(3, "Firewall", 40, 95, "FIREWALL", "damage", "Attacks with a wall of fire"))
-                programs.append(Program(4, "Defense Protocol", 0, 100, "FIREWALL", "defend", "Increases defense"))
-            elif daemon_type.lower() == "aquabyte":
-                programs.append(Program(5, "Encryption", 40, 95, "CRYPTO", "damage", "Attacks with encrypted data"))
-                programs.append(Program(6, "Decrypt", 30, 100, "CRYPTO", "special", "Weakens target's defenses"))
-        except Exception as e:
-            logging.error(f"Error creating starter programs: {e}")
-            # Fall back to a basic program if there's an error
-            programs = [Program(0, "Basic Attack", 40, 95, stats["types"][0], "damage", "A basic attack")]
-        
-        # Create and return the daemon
-        daemon = Daemon(
-            name=daemon_type.capitalize(),
-            types=stats["types"],
-            level=5,
-            base_hp=stats["hp"],
-            base_attack=stats["attack"],
-            base_defense=stats["defense"],
-            base_speed=stats["speed"],
-            base_special=stats["special"],
-            programs=programs
-        )
-        
-        return daemon
-
     def get_current_location(self, world_map):
-        """Returns the Location object corresponding to the player's current location ID."""
-        location = world_map.get(self.location)
-        if not location:
-            logging.error(f"Invalid location ID: {self.location}")
-        return location
-
+        """Get the current Location object from the world map"""
+        if self.current_location in world_map:
+            return world_map[self.current_location]
+        return None
+        
     def move(self, direction, world_map):
-        """Attempts to move the player in a given direction."""
+        """Move the player in the specified direction"""
         current_loc = self.get_current_location(world_map)
         if not current_loc:
-            logging.error("Error: Player's current location not found in world map.")
-            print("Error: Player's current location not found in world map.")
-            return False # Cannot move if current location is invalid
-
-        # Add detailed logging for debugging
-        logging.debug(f"Current location ID: '{self.location}' | Name: '{current_loc.name}'")
-        logging.debug(f"Available exits: {current_loc.exits}")
-
-        if direction in current_loc.exits:
-            destination_id = current_loc.exits[direction]
-            if destination_id in world_map:
-                self.location = destination_id
-                print(f"You move {direction}.")
-                # Return True to indicate successful movement, potentially triggering encounters
-                return True
-            else:
-                # This case should ideally not happen if the world map is consistent
-                logging.error(f"Error: Destination location ID '{destination_id}' not found.")
-                print(f"Error: Destination location ID '{destination_id}' not found.")
-                return False
-        else:
-            # Add a more informative error message
-            logging.info(f"No exit in direction {direction} from {current_loc.name}")
-            print("You can't go that way.")
+            print("Error: You're in an invalid location.")
             return False
-
-    def add_daemon(self, daemon_instance):
-        """Adds a Daemon instance to the player's roster."""
-        from daemon import Daemon  # Import here to avoid circular imports
-        if isinstance(daemon_instance, Daemon):
-            self.daemons.append(daemon_instance)
-            print(f"{daemon_instance.name} added to your roster.")
+            
+        direction = direction.lower()
+        if direction in current_loc.exits:
+            self.current_location = current_loc.exits[direction]
+            return True
         else:
-            import logging
-            logging.error("Error: Attempted to add invalid object as Daemon.")
-            print("Error: Attempted to add invalid object as Daemon.")
-
+            print(f"You can't go {direction} from here.")
+            return False
+            
+    def add_daemon(self, daemon_instance):
+        """Add a daemon to the player's collection"""
+        if daemon_instance:
+            self.daemons.append(daemon_instance)
+            return True
+        return False
+        
     def get_active_daemon(self):
-        """Returns the first available healthy Daemon in the current party order, or None."""
-        for d in self.daemons:
-            if not d.is_fainted():
-                return d
+        """Get the player's active daemon (first in the list)"""
+        if self.daemons:
+            return self.daemons[0]
         return None
-
+        
     def set_active_daemon(self, daemon_to_set):
-        """Moves the specified daemon to the front of the list if it's healthy."""
-        if daemon_to_set in self.daemons and not daemon_to_set.is_fainted():
-            # Check if it's already the first active one
-            first_active = self.get_active_daemon()
-            if daemon_to_set == first_active:
-                 return True # Already active, do nothing
-
+        """Set a daemon as the active daemon (moves to front of list)"""
+        if daemon_to_set in self.daemons:
             self.daemons.remove(daemon_to_set)
             self.daemons.insert(0, daemon_to_set)
-            logging.info(f"Set {daemon_to_set.name} as the active daemon.")
             return True
-        elif daemon_to_set not in self.daemons:
-            logging.warning(f"Attempted to set non-existent daemon {daemon_to_set.name} as active.")
-            return False
-        else: # Daemon is fainted
-             logging.warning(f"Attempted to set fainted daemon {daemon_to_set.name} as active.")
-             print(f"{daemon_to_set.name} is unable to battle!")
-             return False
-
+        return False
+        
     def heal_all_daemons(self):
-        """Restores HP and removes status effects for all daemons."""
-        logging.info(f"Healing all daemons for player {self.name}.")
+        """Fully restore HP for all daemons"""
         for daemon in self.daemons:
-            # Use max_hp attribute which should exist after _calculate_stats
             daemon.hp = daemon.max_hp
-            daemon.status_effect = None # Clear status effects too
-        print("All your Daemons have been fully restored.")
-
+            
     def get_healthy_daemons(self, exclude=None):
-        """Returns a list of Daemons in the roster that are not fainted, optionally excluding one."""
-        healthy = []
-        for d in self.daemons:
-            # Check if daemon is not fainted AND is not the one to exclude
-            if not d.is_fainted() and d != exclude:
-                healthy.append(d)
-        return healthy
-
+        """Get all daemons with HP > 0, optionally excluding one"""
+        return [d for d in self.daemons if d != exclude and d.hp > 0]
+        
     def display_status(self, world_map=None):
-         """Prints the player's current status."""
-         # world_map can be optional with a simple summary display if not provided
-         if world_map:
-             current_loc_obj = world_map.get(self.location) # Use .get for safety
-             location_name = current_loc_obj.name if current_loc_obj else "Unknown Location"
-             location_display = f" Location: {location_name} (ID: {self.location})" # Show ID too for debugging
-         else:
-             # Simple display without location details if world_map not provided
-             location_display = f" Location ID: {self.location}"
-
-         print("\n--- Player Status ---")
-         print(f" Name: {self.name}")
-         print(location_display)
-         print(" Daemons:")
-         if not self.daemons:
-              print("   None")
-         else:
-              active_daemon = self.get_active_daemon() # Get the current active one
-              for i, daemon in enumerate(self.daemons):
-                   # Safely access stats
-                   hp = daemon.hp if hasattr(daemon, 'hp') else daemon.stats.get('hp', 0) 
-                   max_hp = daemon.max_hp if hasattr(daemon, 'max_hp') else daemon.stats.get('max_hp', 0)
-                   status = "Fainted" if daemon.is_fainted() else "Ready"
-                   active_marker = " (Active)" if daemon == active_daemon and not daemon.is_fainted() else ""
-                   print(f"   {i+1}: {daemon.name} (Lv.{daemon.level}) - HP: {hp}/{max_hp} [{status}]{active_marker}")
-
+        """Display player status information"""
+        print(f"\n=== {self.name}'s Status ===")
+        if world_map:
+            current_loc = self.get_current_location(world_map)
+            if current_loc:
+                print(f"Location: {current_loc.name}")
+                
+        # Display active daemon
+        active_daemon = self.get_active_daemon()
+        if active_daemon:
+            print(f"Active Daemon: {active_daemon.name} (Lv.{active_daemon.level})")
+            
+        # Display party summary
+        print(f"Party: {len(self.daemons)} daemon(s)")
+        for i, daemon in enumerate(self.daemons):
+            status = "OK" if daemon.hp > 0 else "FAINTED"
+            print(f"  {i+1}. {daemon.name} (Lv.{daemon.level}) - HP: {daemon.hp}/{daemon.max_hp} - {status}")
+            
     def display_daemons_detailed(self):
-        """Uses the Daemon's display_summary for each owned Daemon."""
+        """Display detailed information about all daemons"""
         if not self.daemons:
-            print("You have no Daemons.")
-        else:
-            print("\n--- Your Daemons ---")
-            for daemon in self.daemons:
-                daemon.display_summary()
-                print("") # Add a newline for spacing
-
+            print("You don't have any daemons yet.")
+            return
+            
+        for daemon in self.daemons:
+            daemon.display_summary()
+            
     def to_dict(self):
         """Convert player data to dictionary for saving"""
-        return {
-            "name": self.name,
-            "location": self.location,
-            "daemons": [daemon.to_dict() for daemon in self.daemons]
-        }
-    @classmethod
-    def from_dict(cls, data, world_map=None): # Add world_map for potential validation if needed later
-        """Create player from saved dictionary"""
-        from daemon import Daemon # Keep import here
-
-        # Use .get for safer dictionary access
-        name = data.get("name", "Unnamed Player")
-        location = data.get("location", None) # Get location ID
-
-        player = cls(
-            name,
-            location,
-            []  # Empty daemon list to start
-        )
-
-        # Add daemons safely
-        loaded_daemons_data = data.get("daemons", [])
-        if isinstance(loaded_daemons_data, list):
-            for daemon_data in loaded_daemons_data:
-                 if isinstance(daemon_data, dict):
-                      try:
-                           player.daemons.append(Daemon.from_dict(daemon_data))
-                      except Exception as e:
-                           logging.error(f"Failed to load daemon from data: {daemon_data}. Error: {e}", exc_info=True)
-                 else:
-                      logging.warning(f"Skipping invalid daemon data entry: {daemon_data}")
-        else:
-             logging.warning(f"Invalid format for 'daemons' in save data: {loaded_daemons_data}")
-
-        return player
-
-    def get_last_active_daemon(self):
-        """
-        Returns the last active daemon from the player's team.
-        If no daemon has been active yet, return the first healthy daemon.
-        """
-        if hasattr(self, 'active_daemon') and self.active_daemon is not None:
-            return self.active_daemon
+        # Convert daemons to dictionaries
+        daemons_data = [daemon.to_dict() for daemon in self.daemons]
         
-        # Fallback to first healthy daemon if no active daemon set
+        # Create the player data dictionary
+        player_data = {
+            "name": self.name,
+            "location": self.current_location,
+            "daemons": daemons_data,
+            "items": self.items,
+            "credits": self.credits
+        }
+        
+        return player_data
+        
+    @classmethod
+    def from_dict(cls, data, world_locations):
+        """Create a Player instance from saved dictionary data"""
+        from daemon import Daemon
+        
+        # Create the player
+        player = cls(data['name'], data['location'])
+        
+        # Load player's daemons
+        for daemon_data in data.get('daemons', []):
+            daemon = Daemon.from_dict(daemon_data)
+            player.daemons.append(daemon)
+            
+        # Load inventory items
+        if 'items' in data:
+            player.items = data['items']
+            
+        # Load credits
+        if 'credits' in data:
+            player.credits = data['credits']
+            
+        return player
+        
+    def get_last_active_daemon(self):
+        """Get the last non-fainted daemon"""
         for daemon in self.daemons:
             if daemon.hp > 0:
                 return daemon
-        
-        # If no healthy daemon found, return first daemon regardless of health
-        if self.daemons:
-            return self.daemons[0]
-            
-        # Should never happen if game validation is working properly
         return None
 
 # --- Example Player Creation (for testing if run directly) ---
