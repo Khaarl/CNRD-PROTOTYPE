@@ -174,6 +174,60 @@ def add_combat_log(message):
         combat_log.pop(0)
 
 # --- Drawing Functions ---
+def draw_main_menu(screen, font, selected_index):
+    """Draws the main menu UI with improved visuals."""
+    # Create gradient background
+    gradient_rect = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    for y in range(SCREEN_HEIGHT):
+        r = int(DARK_PURPLE[0] + (DARK_BLUE[0] - DARK_PURPLE[0]) * y / SCREEN_HEIGHT)
+        g = int(DARK_PURPLE[1] + (DARK_BLUE[1] - DARK_PURPLE[1]) * y / SCREEN_HEIGHT)
+        b = int(DARK_PURPLE[2] + (DARK_BLUE[2] - DARK_PURPLE[2]) * y / SCREEN_HEIGHT)
+        pygame.draw.line(gradient_rect, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+    screen.blit(gradient_rect, (0, 0))
+    
+    # Draw title
+    title_font = pygame.font.Font(None, 64)
+    title_text = "CYBERPUNK NETRUNNER: DIGITAL HUNTERS"
+    title_surface = title_font.render(title_text, True, LIGHT_BLUE)
+    screen.blit(title_surface, (SCREEN_WIDTH//2 - title_surface.get_width()//2, 100))
+    
+    # Draw decorative line
+    pygame.draw.line(screen, LIGHT_BLUE, (150, 170), (SCREEN_WIDTH - 150, 170), 2)
+    
+    # Draw menu options
+    option_y = 250
+    for i, option in enumerate(MENU_OPTIONS):
+        color = CYAN if i == selected_index else WHITE
+        option_surface = font.render(option, True, color)
+        x_pos = SCREEN_WIDTH//2 - option_surface.get_width()//2
+        screen.blit(option_surface, (x_pos, option_y))
+        
+        # Draw selection indicator for current selection
+        if i == selected_index:
+            pygame.draw.rect(screen, CYAN, (x_pos - 20, option_y - 5, 
+                             option_surface.get_width() + 40, option_surface.get_height() + 10), 2)
+            # Draw triangle indicators
+            pygame.draw.polygon(screen, CYAN, [(x_pos - 15, option_y + option_surface.get_height()//2), 
+                                              (x_pos - 5, option_y + option_surface.get_height()//2 - 5),
+                                              (x_pos - 5, option_y + option_surface.get_height()//2 + 5)])
+            pygame.draw.polygon(screen, CYAN, [(x_pos + option_surface.get_width() + 15, option_y + option_surface.get_height()//2), 
+                                              (x_pos + option_surface.get_width() + 5, option_y + option_surface.get_height()//2 - 5),
+                                              (x_pos + option_surface.get_width() + 5, option_y + option_surface.get_height()//2 + 5)])
+        
+        option_y += 60
+    
+    # Draw version info
+    version_font = pygame.font.Font(None, 24)
+    version_text = "v0.3.2 - Prototype"
+    version_surface = version_font.render(version_text, True, GRAY)
+    screen.blit(version_surface, (SCREEN_WIDTH - version_surface.get_width() - 10, SCREEN_HEIGHT - version_surface.get_height() - 10))
+    
+    # Draw navigation help
+    help_font = pygame.font.Font(None, 24)
+    help_text = "Navigate: Arrow Keys | Select: Enter"
+    help_surface = help_font.render(help_text, True, GRAY)
+    screen.blit(help_surface, (10, SCREEN_HEIGHT - help_surface.get_height() - 10))
+
 def draw_roaming(screen, font, player, location, world_map):
     """Draws the UI for the roaming state with improved visuals."""
     # Create gradient background (similar to main menu)
@@ -607,6 +661,32 @@ def draw_combat(screen, font, player, player_daemon, enemy_daemon):
         fled_text = "Got away safely!"
         draw_text(screen, fled_text, action_font, GREEN, action_panel_x + 10, action_panel_y + 30)
     # TODO: Add drawing for other sub-states (switch, capture result, combat end messages)
+
+def handle_menu_selection(selected_index, player):
+    """Handle selection from the main menu"""
+    global game_state
+    
+    if selected_index == 0:  # New Game
+        # We'll need to implement a name input system
+        # For now, just start with a default name
+        player.name = "Runner"  # Default name
+        game_state = "roaming"
+        logging.info("Starting new game")
+    
+    elif selected_index == 1:  # Load Game
+        # Would need to implement a save/load system
+        # For now, just use default settings and go to roaming
+        logging.info("Load game selected, starting default game for now")
+        game_state = "roaming"
+    
+    elif selected_index == 2:  # Options
+        # Would implement options menu
+        logging.info("Options menu selected (not yet implemented)")
+        # No state change for now
+    
+    elif selected_index == 3:  # Quit
+        pygame.quit()
+        sys.exit()
 
 # Define the main function that bootstrap.py will call
 def main():
