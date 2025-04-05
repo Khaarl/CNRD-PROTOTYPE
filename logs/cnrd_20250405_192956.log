@@ -1,0 +1,7 @@
+2025-04-05 19:29:56 - INFO - Logging initialized
+2025-04-05 19:29:56 - INFO - Starting CNRD bootstrap process
+2025-04-05 19:29:57 - WARNING - Dev instruction file main_instructions.txt not found
+2025-04-05 19:29:57 - WARNING - Dev instruction file menu_instructions.txt not found
+2025-04-05 19:29:57 - INFO - Game initialized with data from config files and Location objects created.
+2025-04-05 19:30:03 - INFO - Starting new game
+2025-04-05 19:30:13 - INFO - Game log saved to logs\game_session_20250405_193013.log
