@@ -362,7 +362,7 @@ def draw_roaming(screen, font, player, location, world_map):
 
     # Command help at the very bottom
     help_font = pygame.font.Font(None, 24)
-    help_text = "Move: Arrow Keys | Menu: ESC | Quit: Q"
+    help_text = "Move: Arrow Keys | Inventory: I | Menu: ESC | Quit: Q"
     draw_text(screen, help_text, help_font, GRAY, SCREEN_WIDTH//2 - help_font.render(help_text, True, GRAY).get_width()//2, 
               SCREEN_HEIGHT - 25)
 
@@ -662,6 +662,356 @@ def draw_combat(screen, font, player, player_daemon, enemy_daemon):
         draw_text(screen, fled_text, action_font, GREEN, action_panel_x + 10, action_panel_y + 30)
     # TODO: Add drawing for other sub-states (switch, capture result, combat end messages)
 
+def draw_inventory(screen, font, player, inventory_tab):
+    """Draws the inventory screen with tabs for daemons, programs, and items."""
+    # Create gradient background (similar to main menu but with darker tones)
+    gradient_rect = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    for y in range(SCREEN_HEIGHT):
+        r = int(DARK_PURPLE[0] * 0.7 + (DARK_BLUE[0] * 0.7) * y / SCREEN_HEIGHT)
+        g = int(DARK_PURPLE[1] * 0.7 + (DARK_BLUE[1] * 0.7) * y / SCREEN_HEIGHT)
+        b = int(DARK_PURPLE[2] * 0.7 + (DARK_BLUE[2] * 0.7) * y / SCREEN_HEIGHT)
+        pygame.draw.line(gradient_rect, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+    screen.blit(gradient_rect, (0, 0))
+    
+    # Add grid pattern for cyber aesthetic
+    for x in range(0, SCREEN_WIDTH, 40):
+        pygame.draw.line(screen, (40, 80, 120, 30), (x, 0), (x, SCREEN_HEIGHT), 1)
+    for y in range(0, SCREEN_HEIGHT, 40):
+        pygame.draw.line(screen, (40, 80, 120, 30), (0, y), (SCREEN_WIDTH, y), 1)
+    
+    # Header with inventory title
+    header_height = 50
+    header_rect = pygame.Rect(0, 0, SCREEN_WIDTH, header_height)
+    pygame.draw.rect(screen, (20, 30, 60), header_rect)
+    pygame.draw.line(screen, CYAN, (0, header_height), (SCREEN_WIDTH, header_height), 2)
+    
+    title_font = pygame.font.Font(None, 48)
+    title = "INVENTORY"
+    title_surface = title_font.render(title, True, LIGHT_BLUE)
+    screen.blit(title_surface, (SCREEN_WIDTH//2 - title_surface.get_width()//2, 10))
+    
+    # Inventory tabs
+    tabs = ["DAEMONS", "PROGRAMS", "ITEMS"]
+    
+    tab_width = SCREEN_WIDTH // len(tabs)
+    tab_height = 40
+    tab_y = header_height
+    tab_font = pygame.font.Font(None, 32)
+    
+    for i, tab in enumerate(tabs):
+        tab_x = i * tab_width
+        tab_rect = pygame.Rect(tab_x, tab_y, tab_width, tab_height)
+        
+        # Different style for selected tab
+        if i == inventory_tab:
+            pygame.draw.rect(screen, (40, 80, 120), tab_rect)
+            color = WHITE
+        else:
+            pygame.draw.rect(screen, (30, 40, 70), tab_rect)
+            color = GRAY
+            
+        # Tab borders
+        pygame.draw.rect(screen, LIGHT_BLUE, tab_rect, 1)
+        
+        # Tab text
+        tab_text = tab_font.render(tab, True, color)
+        screen.blit(tab_text, (tab_x + tab_width//2 - tab_text.get_width()//2, 
+                             tab_y + tab_height//2 - tab_text.get_height()//2))
+    
+    # Content area
+    content_rect = pygame.Rect(10, tab_y + tab_height + 10, 
+                             SCREEN_WIDTH - 20, SCREEN_HEIGHT - tab_y - tab_height - 70)
+    pygame.draw.rect(screen, (20, 30, 50, 180), content_rect)
+    pygame.draw.rect(screen, LIGHT_BLUE, content_rect, 1)
+    
+    # Different content based on selected tab
+    if inventory_tab == 0:  # DAEMONS
+        draw_daemon_inventory(screen, player, content_rect)
+    elif inventory_tab == 1:  # PROGRAMS
+        draw_program_inventory(screen, player, content_rect)
+    else:  # ITEMS
+        draw_item_inventory(screen, player, content_rect)
+    
+    # Footer with help
+    footer_y = SCREEN_HEIGHT - 50
+    footer_rect = pygame.Rect(0, footer_y, SCREEN_WIDTH, 50)
+    pygame.draw.rect(screen, (20, 30, 60), footer_rect)
+    pygame.draw.line(screen, CYAN, (0, footer_y), (SCREEN_WIDTH, footer_y), 2)
+    
+    help_font = pygame.font.Font(None, 24)
+    help_text = "Tab: Switch Category | Enter: Select | I/ESC: Close Inventory"
+    help_surface = help_font.render(help_text, True, GRAY)
+    screen.blit(help_surface, (SCREEN_WIDTH//2 - help_surface.get_width()//2, 
+                             footer_y + 50//2 - help_surface.get_height()//2))
+
+def draw_daemon_inventory(screen, player, content_rect):
+    """Draw the daemon inventory tab content."""
+    # Header for the daemon list
+    header_font = pygame.font.Font(None, 28)
+    header_text = "YOUR DAEMONS:"
+    header_surface = header_font.render(header_text, True, CYAN)
+    screen.blit(header_surface, (content_rect.x + 15, content_rect.y + 15))
+    
+    # Draw separating line
+    pygame.draw.line(screen, LIGHT_BLUE, 
+                   (content_rect.x + 10, content_rect.y + 45),
+                   (content_rect.right - 10, content_rect.y + 45), 1)
+    
+    if not player.daemons:
+        # No daemons message
+        no_daemons_font = pygame.font.Font(None, 36)
+        no_daemons_text = "No daemons in your collection!"
+        no_daemons_surface = no_daemons_font.render(no_daemons_text, True, RED)
+        screen.blit(no_daemons_surface, (content_rect.centerx - no_daemons_surface.get_width()//2, 
+                                      content_rect.centery - no_daemons_surface.get_height()//2))
+    else:
+        # Daemon entry height and starting y position
+        entry_height = 90
+        start_y = content_rect.y + 55
+        
+        # Draw daemon entries
+        for i, daemon in enumerate(player.daemons):
+            y_pos = start_y + i * (entry_height + 10)
+            
+            # Stop drawing if we're out of space
+            if y_pos + entry_height > content_rect.bottom - 10:
+                more_text = "... more daemons not shown"
+                more_font = pygame.font.Font(None, 24)
+                more_surface = more_font.render(more_text, True, GRAY)
+                screen.blit(more_surface, (content_rect.centerx - more_surface.get_width()//2, 
+                                        content_rect.bottom - 30))
+                break
+                
+            # Daemon entry background
+            entry_rect = pygame.Rect(content_rect.x + 15, y_pos, content_rect.width - 30, entry_height)
+            
+            # Highlight active daemon
+            if daemon == player.get_active_daemon():
+                pygame.draw.rect(screen, (40, 100, 120, 180), entry_rect)
+                pygame.draw.rect(screen, CYAN, entry_rect, 2)
+            else:
+                pygame.draw.rect(screen, (30, 40, 90, 180), entry_rect)
+                pygame.draw.rect(screen, LIGHT_BLUE, entry_rect, 1)
+            
+            # Daemon name and level
+            name_font = pygame.font.Font(None, 36)
+            name_text = f"{daemon.name} - Lvl {daemon.level}"
+            name_surface = name_font.render(name_text, True, WHITE)
+            screen.blit(name_surface, (entry_rect.x + 10, entry_rect.y + 10))
+            
+            # Type indicator 
+            type_font = pygame.font.Font(None, 24)
+            type_text = f"Type: {daemon.daemon_type}"
+            type_surface = type_font.render(type_text, True, LIGHT_BLUE)
+            screen.blit(type_surface, (entry_rect.x + 10, entry_rect.y + 40))
+            
+            # Health stats with mini health bar
+            hp_text = f"HP: {daemon.hp}/{daemon.max_hp}"
+            hp_surface = type_font.render(hp_text, True, WHITE)
+            screen.blit(hp_surface, (entry_rect.x + 10, entry_rect.y + 65))
+            
+            # Mini HP bar
+            hp_bar_width = 150
+            hp_bar_height = 8
+            hp_bar_x = entry_rect.x + 100
+            hp_bar_y = entry_rect.y + 70
+            draw_hp_bar(screen, hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, 
+                       daemon.hp, daemon.max_hp)
+            
+            # Status indicator (if any)
+            if daemon.status_effect:
+                status_text = f"STATUS: {daemon.status_effect}"
+                status_surface = type_font.render(status_text, True, RED)
+                screen.blit(status_surface, (entry_rect.x + 280, entry_rect.y + 40))
+                
+            # Program count
+            program_count = len(daemon.programs) if hasattr(daemon, 'programs') else 0
+            program_text = f"Programs: {program_count}"
+            program_surface = type_font.render(program_text, True, WHITE)
+            screen.blit(program_surface, (entry_rect.x + 280, entry_rect.y + 65))
+            
+            # Active indicator
+            if daemon == player.get_active_daemon():
+                active_font = pygame.font.Font(None, 24)
+                active_text = "ACTIVE"
+                active_surface = active_font.render(active_text, True, GREEN)
+                active_rect = pygame.Rect(entry_rect.right - 100, entry_rect.y + 15, 
+                                        80, 25)
+                pygame.draw.rect(screen, (0, 100, 0), active_rect)
+                pygame.draw.rect(screen, GREEN, active_rect, 1)
+                screen.blit(active_surface, (active_rect.centerx - active_surface.get_width()//2, 
+                                          active_rect.centery - active_surface.get_height()//2))
+
+def draw_program_inventory(screen, player, content_rect):
+    """Draw the program inventory tab content."""
+    # Get active daemon for viewing its programs
+    active_daemon = player.get_active_daemon()
+    
+    # Header for the program list
+    header_font = pygame.font.Font(None, 28)
+    
+    if active_daemon:
+        header_text = f"PROGRAMS FOR {active_daemon.name}:"
+        header_surface = header_font.render(header_text, True, CYAN)
+        screen.blit(header_surface, (content_rect.x + 15, content_rect.y + 15))
+        
+        # Draw separating line
+        pygame.draw.line(screen, LIGHT_BLUE, 
+                       (content_rect.x + 10, content_rect.y + 45),
+                       (content_rect.right - 10, content_rect.y + 45), 1)
+        
+        if not hasattr(active_daemon, 'programs') or not active_daemon.programs:
+            # No programs message
+            no_programs_font = pygame.font.Font(None, 36)
+            no_programs_text = "No programs installed on this daemon!"
+            no_programs_surface = no_programs_font.render(no_programs_text, True, RED)
+            screen.blit(no_programs_surface, (content_rect.centerx - no_programs_surface.get_width()//2, 
+                                          content_rect.centery - no_programs_surface.get_height()//2))
+        else:
+            # Program grid layout
+            grid_cols = 2
+            grid_rows = (len(active_daemon.programs) + grid_cols - 1) // grid_cols  # Ceiling division
+            
+            cell_width = (content_rect.width - 30) // grid_cols
+            cell_height = 120
+            padding = 10
+            
+            # Draw program entries
+            for i, program in enumerate(active_daemon.programs):
+                col = i % grid_cols
+                row = i // grid_cols
+                
+                x_pos = content_rect.x + 15 + col * cell_width
+                y_pos = content_rect.y + 55 + row * (cell_height + padding)
+                
+                # Stop drawing if we're out of space
+                if y_pos + cell_height > content_rect.bottom - 10:
+                    more_text = "... more programs not shown"
+                    more_font = pygame.font.Font(None, 24)
+                    more_surface = more_font.render(more_text, True, GRAY)
+                    screen.blit(more_surface, (content_rect.centerx - more_surface.get_width()//2, 
+                                            content_rect.bottom - 30))
+                    break
+                    
+                # Program entry background
+                entry_rect = pygame.Rect(x_pos, y_pos, cell_width - padding, cell_height)
+                pygame.draw.rect(screen, (30, 45, 80, 180), entry_rect)
+                pygame.draw.rect(screen, LIGHT_BLUE, entry_rect, 1)
+                
+                # Program name
+                name_font = pygame.font.Font(None, 32)
+                name_surface = name_font.render(program.name, True, WHITE)
+                screen.blit(name_surface, (entry_rect.x + 10, entry_rect.y + 10))
+                
+                # Program type
+                type_font = pygame.font.Font(None, 24)
+                type_surface = type_font.render(f"Type: {program.program_type}", True, LIGHT_BLUE)
+                screen.blit(type_surface, (entry_rect.x + 10, entry_rect.y + 40))
+                
+                # Program stats
+                stats_font = pygame.font.Font(None, 20)
+                power_text = f"Power: {program.power}"
+                power_surface = stats_font.render(power_text, True, WHITE)
+                screen.blit(power_surface, (entry_rect.x + 10, entry_rect.y + 65))
+                
+                acc_text = f"Accuracy: {program.accuracy}%"
+                acc_surface = stats_font.render(acc_text, True, WHITE)
+                screen.blit(acc_surface, (entry_rect.x + 10, entry_rect.y + 85))
+                
+                # If program has an effect, show it
+                if hasattr(program, 'effect') and program.effect and program.effect != "damage":
+                    effect_text = f"Effect: {program.effect.capitalize()}"
+                    effect_surface = stats_font.render(effect_text, True, YELLOW)
+                    screen.blit(effect_surface, (entry_rect.x + 10, entry_rect.y + 105))
+    else:
+        # No active daemon message
+        no_daemon_font = pygame.font.Font(None, 36)
+        no_daemon_text = "No active daemon selected!"
+        no_daemon_surface = no_daemon_font.render(no_daemon_text, True, RED)
+        screen.blit(no_daemon_surface, (content_rect.centerx - no_daemon_surface.get_width()//2, 
+                                     content_rect.centery - no_daemon_surface.get_height()//2))
+        
+        help_text = "Select an active daemon in the DAEMONS tab first"
+        help_font = pygame.font.Font(None, 28)
+        help_surface = help_font.render(help_text, True, GRAY)
+        screen.blit(help_surface, (content_rect.centerx - help_surface.get_width()//2, 
+                                 content_rect.centery - help_surface.get_height()//2 + 40))
+
+def draw_item_inventory(screen, player, content_rect):
+    """Draw the item inventory tab content."""
+    # Header for the item list
+    header_font = pygame.font.Font(None, 28)
+    header_text = "YOUR ITEMS:"
+    header_surface = header_font.render(header_text, True, CYAN)
+    screen.blit(header_surface, (content_rect.x + 15, content_rect.y + 15))
+    
+    # Draw separating line
+    pygame.draw.line(screen, LIGHT_BLUE, 
+                   (content_rect.x + 10, content_rect.y + 45),
+                   (content_rect.right - 10, content_rect.y + 45), 1)
+    
+    # Check if player has items
+    if not hasattr(player, 'items') or not player.items:
+        # No items message
+        no_items_font = pygame.font.Font(None, 36)
+        no_items_text = "No items in your inventory!"
+        no_items_surface = no_items_font.render(no_items_text, True, RED)
+        screen.blit(no_items_surface, (content_rect.centerx - no_items_surface.get_width()//2, 
+                                     content_rect.centery - no_items_surface.get_height()//2))
+    else:
+        # Item grid layout
+        grid_cols = 3
+        grid_rows = (len(player.items) + grid_cols - 1) // grid_cols  # Ceiling division
+        
+        cell_width = (content_rect.width - 30) // grid_cols
+        cell_height = 100
+        padding = 10
+        
+        # Draw item entries
+        for i, item in enumerate(player.items):
+            col = i % grid_cols
+            row = i // grid_cols
+            
+            x_pos = content_rect.x + 15 + col * cell_width
+            y_pos = content_rect.y + 55 + row * (cell_height + padding)
+            
+            # Stop drawing if we're out of space
+            if y_pos + cell_height > content_rect.bottom - 10:
+                more_text = "... more items not shown"
+                more_font = pygame.font.Font(None, 24)
+                more_surface = more_font.render(more_text, True, GRAY)
+                screen.blit(more_surface, (content_rect.centerx - more_surface.get_width()//2, 
+                                        content_rect.bottom - 30))
+                break
+                
+            # Item entry background
+            entry_rect = pygame.Rect(x_pos, y_pos, cell_width - padding, cell_height)
+            pygame.draw.rect(screen, (35, 40, 70, 180), entry_rect)
+            pygame.draw.rect(screen, LIGHT_BLUE, entry_rect, 1)
+            
+            # Item name
+            name_font = pygame.font.Font(None, 28)
+            name_text = item.name if hasattr(item, 'name') else "Unknown Item"
+            name_surface = name_font.render(name_text, True, WHITE)
+            screen.blit(name_surface, (entry_rect.x + 10, entry_rect.y + 10))
+            
+            # Item type
+            type_font = pygame.font.Font(None, 20)
+            type_text = f"Type: {item.item_type if hasattr(item, 'item_type') else 'Misc'}"
+            type_surface = type_font.render(type_text, True, LIGHT_BLUE)
+            screen.blit(type_surface, (entry_rect.x + 10, entry_rect.y + 40))
+            
+            # Item quantity
+            qty_text = f"Qty: {item.quantity if hasattr(item, 'quantity') else 1}"
+            qty_surface = type_font.render(qty_text, True, WHITE)
+            screen.blit(qty_surface, (entry_rect.x + 10, entry_rect.y + 60))
+            
+            # Item value/price if applicable
+            if hasattr(item, 'value'):
+                value_text = f"Value: ¥{item.value}"
+                value_surface = type_font.render(value_text, True, YELLOW)
+                screen.blit(value_surface, (entry_rect.x + 10, entry_rect.y + 80))
+
 def handle_menu_selection(selected_index, player):
     """Handle selection from the main menu"""
     global game_state
@@ -704,6 +1054,7 @@ def main():
     global game_state, menu_selected_index, combat_sub_state, combat_log
     game_state = "main_menu"
     menu_selected_index = 0
+    inventory_tab = 0  # Track which inventory tab is selected (0: Daemons, 1: Programs, 2: Items)
     combat_sub_state = "player_choose_action"  # Default combat sub-state
     
     # Initialize game data
@@ -751,8 +1102,53 @@ def main():
                     elif event.key == pygame.K_RETURN:
                         handle_menu_selection(menu_selected_index, player)
                 
-                # Handle other states and inputs here
-                # ...
+                # Add roaming state controls
+                elif game_state == "roaming":
+                    # Movement controls
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        logging.debug(f"Attempting to move north from {player.location}")
+                        success = player.move("north", world_map)
+                        if not success:
+                            add_to_game_log("Cannot move in that direction.")
+                    elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        logging.debug(f"Attempting to move south from {player.location}")
+                        success = player.move("south", world_map)
+                        if not success:
+                            add_to_game_log("Cannot move in that direction.")
+                    elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                        logging.debug(f"Attempting to move west from {player.location}")
+                        success = player.move("west", world_map)
+                        if not success:
+                            add_to_game_log("Cannot move in that direction.")
+                    elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                        logging.debug(f"Attempting to move east from {player.location}")
+                        success = player.move("east", world_map)
+                        if not success:
+                            add_to_game_log("Cannot move in that direction.")
+                    # Inventory key
+                    elif event.key == pygame.K_i:
+                        game_state = "inventory"
+                        logging.debug("Opening inventory")
+                    # Menu key
+                    elif event.key == pygame.K_ESCAPE:
+                        game_state = "main_menu"
+                        logging.debug("Returning to main menu")
+                
+                elif game_state == "inventory":
+                    # Inventory navigation
+                    if event.key == pygame.K_TAB:
+                        inventory_tab = (inventory_tab + 1) % 3  # Cycle through tabs
+                        logging.debug(f"Switched to inventory tab {inventory_tab}")
+                    elif event.key == pygame.K_LEFT:
+                        inventory_tab = (inventory_tab - 1) % 3  # Previous tab
+                        logging.debug(f"Switched to inventory tab {inventory_tab}")
+                    elif event.key == pygame.K_RIGHT:
+                        inventory_tab = (inventory_tab + 1) % 3  # Next tab
+                        logging.debug(f"Switched to inventory tab {inventory_tab}")
+                    # Close inventory
+                    elif event.key == pygame.K_i or event.key == pygame.K_ESCAPE:
+                        game_state = "roaming"
+                        logging.debug("Closing inventory, returning to roaming")
         
         # Update game logic based on state
         if game_state == "main_menu":
@@ -779,6 +1175,8 @@ def main():
             enemy_daemon = None  # This would be set during combat initialization
             if player_daemon and enemy_daemon:
                 draw_combat(screen, font, player, player_daemon, enemy_daemon)
+        elif game_state == "inventory":
+            draw_inventory(screen, font, player, inventory_tab)
         
         # Display to screen
         pygame.display.flip()
