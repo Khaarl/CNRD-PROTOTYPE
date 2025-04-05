@@ -1,0 +1,30 @@
+2025-04-05 15:37:38 - INFO - Logging initialized
+2025-04-05 15:37:38 - INFO - Starting CNRD bootstrap process
+2025-04-05 15:37:38 - INFO - Game starting up
+2025-04-05 15:37:38 - INFO - Successfully loaded data from config\daemons.json
+2025-04-05 15:37:38 - INFO - Successfully loaded data from config\programs.json
+2025-04-05 15:37:38 - INFO - Successfully loaded data from config\locations.json
+2025-04-05 15:37:38 - INFO - Game data loaded successfully
+2025-04-05 15:37:38 - INFO - Game initialized with data from config files and Location objects created.
+2025-04-05 15:37:38 - INFO - Game loaded successfully from saves\karl.json
+2025-04-05 15:37:38 - WARNING - Loaded daemon 'virulet' using legacy 'daemon_type'. Converted to types: ['VIRUS']
+2025-04-05 15:37:38 - WARNING - Loaded daemon 'virulet' using legacy 'daemon_type'. Converted to types: ['VIRUS']
+2025-04-05 15:37:38 - INFO - Loaded player: karl
+2025-04-05 15:37:38 - WARNING - Loaded player location 'home' invalid. Resetting.
+2025-04-05 15:40:25 - INFO - Player moved east to Slum Hideout
+2025-04-05 15:40:29 - INFO - Player moved north to Maintenance Tunnel
+2025-04-05 15:40:29 - ERROR - Unknown daemon ID: circuit_wraith
+2025-04-05 15:40:29 - ERROR - Failed to create wild daemon 'circuit_wraith'
+2025-04-05 15:40:31 - INFO - Player moved north to Grid Access Point
+2025-04-05 15:40:35 - INFO - Player moved west to Dataport Hub
+2025-04-05 15:40:36 - INFO - Player moved north to Corporate Plaza
+2025-04-05 15:40:39 - INFO - Player moved west to Research Wing
+2025-04-05 15:40:42 - INFO - Player moved east to Corporate Plaza
+2025-04-05 15:40:43 - INFO - Player moved west to Research Wing
+2025-04-05 15:40:43 - INFO - Player moved east to Corporate Plaza
+2025-04-05 15:40:46 - INFO - Player moved east to Executive Elevator
+2025-04-05 15:40:50 - INFO - Player moved west to Corporate Plaza
+2025-04-05 15:40:50 - INFO - Player moved east to Executive Elevator
+2025-04-05 15:40:51 - INFO - Player moved west to Corporate Plaza
+2025-04-05 15:42:14 - INFO - Player moved east to Executive Elevator
+2025-04-05 15:42:19 - INFO - Game shutting down

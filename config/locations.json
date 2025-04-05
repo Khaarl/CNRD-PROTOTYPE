@@ -1,50 +1,304 @@
 {
-  "start_location": "home",
+  "start_location": "dark_alley",
   "locations": {
-    "home": {
-      "name": "Home",
-      "description": "Your small apartment with a computer setup",
-      "encounter_rate": 0,
+    "dark_alley": {
+      "name": "Dark Alley",
+      "description": "A grimy, narrow alley flickering under a broken neon sign. Data cables droop overhead like digital vines in this forgotten corner of the city. The cracked pavement reflects puddles of neon light.",
+      "encounter_rate": 0.1,
+      "scan_encounter_rate": 0.3,
       "exits": {
-        "north": "uptown",
-        "east": "downtown"
+        "north": "market_square",
+        "east": "slum_hideout"
+      },
+      "wild_daemons": [
+        {"id": "glitch_sprite", "min_lvl": 1, "max_lvl": 3},
+        {"id": "rat_bot", "min_lvl": 1, "max_lvl": 2}
+      ]
+    },
+    "market_square": {
+      "name": "Market Square",
+      "description": "A bustling digital bazaar where data-hawkers and synth-food vendors compete for attention. Holographic advertisements flicker and dance across crumbling concrete walls. The smell of fried circuits mingles with street food aromas.",
+      "encounter_rate": 0.2,
+      "scan_encounter_rate": 0.4,
+      "exits": {
+        "south": "dark_alley",
+        "east": "dataport_hub",
+        "north": "uptown_plaza",
+        "west": "noodle_shop"
+      },
+      "wild_daemons": [
+        {"id": "glitch_sprite", "min_lvl": 2, "max_lvl": 4},
+        {"id": "rat_bot", "min_lvl": 2, "max_lvl": 3},
+        {"id": "byte_bug", "min_lvl": 3, "max_lvl": 5}
+      ]
+    },
+    "dataport_hub": {
+      "name": "Dataport Hub",
+      "description": "Rows of public access terminals hum with activity under flickering fluorescent lights. Netrunners of varying skill levels jack in and out of the Grid, their faces illuminated by scrolling code. Security cameras track every movement.",
+      "encounter_rate": 0.3,
+      "scan_encounter_rate": 0.5,
+      "exits": {
+        "west": "market_square",
+        "north": "corporate_plaza",
+        "east": "grid_access_point"
+      },
+      "wild_daemons": [
+        {"id": "byte_bug", "min_lvl": 3, "max_lvl": 5},
+        {"id": "data_specter", "min_lvl": 4, "max_lvl": 6}
+      ]
+    },
+    "slum_hideout": {
+      "name": "Slum Hideout",
+      "description": "A cramped hacker den hidden beneath piles of discarded tech. Recycled hardware lines the walls, and the air is thick with the smell of soldering and energy drinks. Dim LED strips provide just enough light to see.",
+      "encounter_rate": 0.0,
+      "scan_encounter_rate": 0.2,
+      "exits": {
+        "west": "dark_alley",
+        "north": "maintenance_tunnel"
+      },
+      "wild_daemons": [
+        {"id": "glitch_sprite", "min_lvl": 1, "max_lvl": 2}
+      ]
+    },
+    "maintenance_tunnel": {
+      "name": "Maintenance Tunnel",
+      "description": "A narrow service passage lined with fiber optic cables and leaking coolant pipes. The hum of server farms vibrates through the metal floor grates. Emergency lights cast long shadows down the corridor.",
+      "encounter_rate": 0.4,
+      "scan_encounter_rate": 0.6,
+      "exits": {
+        "south": "slum_hideout",
+        "north": "grid_access_point"
+      },
+      "wild_daemons": [
+        {"id": "circuit_wraith", "min_lvl": 4, "max_lvl": 7},
+        {"id": "rat_bot", "min_lvl": 3, "max_lvl": 5}
+      ]
+    },
+    "grid_access_point": {
+      "name": "Grid Access Point",
+      "description": "A secured entry point to the city's digital Grid. Holographic warning signs flutter in the air, and authentication scanners sweep the area with blue light. The barrier between physical and digital worlds seems thinnest here.",
+      "encounter_rate": 0.5,
+      "scan_encounter_rate": 0.7,
+      "exits": {
+        "west": "dataport_hub",
+        "south": "maintenance_tunnel",
+        "east": "digital_realm"
+      },
+      "wild_daemons": [
+        {"id": "firewall_sentinel", "min_lvl": 5, "max_lvl": 8},
+        {"id": "data_specter", "min_lvl": 6, "max_lvl": 9},
+        {"id": "byte_bug", "min_lvl": 4, "max_lvl": 6}
+      ]
+    },
+    "digital_realm": {
+      "name": "Digital Realm",
+      "description": "The visual representation of the Grid stretches in all directions - an infinite cityscape of data constructs and code formations. Your physical form is translated to a digital avatar here. Information flows like neon rivers between towering data structures.",
+      "encounter_rate": 0.6,
+      "scan_encounter_rate": 0.8,
+      "exits": {
+        "west": "grid_access_point",
+        "north": "datasphere_nexus",
+        "east": "firewall_checkpoint"
+      },
+      "wild_daemons": [
+        {"id": "pixel_phantom", "min_lvl": 7, "max_lvl": 10},
+        {"id": "crypto_wraith", "min_lvl": 8, "max_lvl": 12},
+        {"id": "binary_beast", "min_lvl": 9, "max_lvl": 14}
+      ]
+    },
+    "noodle_shop": {
+      "name": "Neon Noodle Shop",
+      "description": "A steamy hole-in-the-wall eatery where programmers and street runners refuel. The chef's augmented arms work four woks simultaneously while news feeds project onto the steam. The smell of synthetic spices fills the air.",
+      "encounter_rate": 0.0,
+      "scan_encounter_rate": 0.0,
+      "exits": {
+        "east": "market_square",
+        "north": "back_alley"
       }
     },
-    "uptown": {
-      "name": "Uptown District",
-      "description": "A clean, high-tech area with corporate buildings",
-      "encounter_rate": 20,
+    "back_alley": {
+      "name": "Back Alley",
+      "description": "A shadowy passage behind the noodle shop where black market deals occur. Dropboxes for illicit data transfers are disguised as trash bins. The walls are covered with graffiti-style AR tags visible only to those with the right visual filters.",
+      "encounter_rate": 0.3,
+      "scan_encounter_rate": 0.5,
       "exits": {
-        "south": "home",
-        "east": "central_hub"
+        "south": "noodle_shop",
+        "north": "hidden_server_room"
+      },
+      "wild_daemons": [
+        {"id": "trojan_mule", "min_lvl": 5, "max_lvl": 8},
+        {"id": "rat_bot", "min_lvl": 4, "max_lvl": 6}
+      ]
+    },
+    "hidden_server_room": {
+      "name": "Hidden Server Room",
+      "description": "A clandestine operation running illegal servers behind soundproof walls. Cooling units struggle to keep up with overclocked hardware. Terminals here offer anonymous access to restricted parts of the Grid for those who know the passwords.",
+      "encounter_rate": 0.4,
+      "scan_encounter_rate": 0.6,
+      "exits": {
+        "south": "back_alley"
+      },
+      "wild_daemons": [
+        {"id": "firewall_sentinel", "min_lvl": 7, "max_lvl": 10},
+        {"id": "ghost_protocol", "min_lvl": 8, "max_lvl": 12}
+      ]
+    },
+    "uptown_plaza": {
+      "name": "Uptown Plaza",
+      "description": "The gleaming corporate sector where sleek skyscrapers pierce the clouds. Private security drones patrol between manicured holographic gardens. Every surface reflects the wealth and power of the tech conglomerates that rule the city.",
+      "encounter_rate": 0.2,
+      "scan_encounter_rate": 0.4,
+      "exits": {
+        "south": "market_square",
+        "north": "corporate_plaza",
+        "west": "luxury_apartments"
+      },
+      "wild_daemons": [
+        {"id": "security_byte", "min_lvl": 6, "max_lvl": 9},
+        {"id": "corporate_sprite", "min_lvl": 7, "max_lvl": 10}
+      ]
+    },
+    "corporate_plaza": {
+      "name": "Corporate Plaza",
+      "description": "The towering headquarters of DataSec dominates this pristine plaza. Armed guards and automated defense systems protect the entrance. Employees with corporate-grade augmentations stride purposefully across the polished marble floor.",
+      "encounter_rate": 0.1,
+      "scan_encounter_rate": 0.3,
+      "exits": {
+        "south": "uptown_plaza",
+        "east": "executive_elevator",
+        "west": "research_wing"
+      },
+      "wild_daemons": [
+        {"id": "security_byte", "min_lvl": 8, "max_lvl": 12},
+        {"id": "corporate_sprite", "min_lvl": 9, "max_lvl": 14}
+      ]
+    },
+    "luxury_apartments": {
+      "name": "Luxury Apartments",
+      "description": "A high-rise residence for the digital elite. Smart-glass windows adjust opacity automatically, and doormen with military-grade augmentations screen all visitors. The air feels cleaner here, filtered of the city's toxic smog.",
+      "encounter_rate": 0.0,
+      "scan_encounter_rate": 0.2,
+      "exits": {
+        "east": "uptown_plaza"
       }
     },
-    "downtown": {
-      "name": "Downtown District",
-      "description": "A gritty area with old tech and sketchy connections",
-      "encounter_rate": 30,
+    "executive_elevator": {
+      "name": "Executive Elevator",
+      "description": "A secure lift requiring the highest clearance levels. The carbon fiber doors slide open silently to reveal an interior of brushed steel and subtle lighting. This elevator leads to the most restricted areas of the corporate tower.",
+      "encounter_rate": 0.0,
+      "scan_encounter_rate": 0.0,
       "exits": {
-        "west": "home",
-        "north": "central_hub"
+        "west": "corporate_plaza",
+        "up": "server_level"
       }
     },
-    "central_hub": {
-      "name": "Central Network Hub",
-      "description": "The main connection point for the city's networks",
-      "encounter_rate": 40,
+    "server_level": {
+      "name": "Server Level",
+      "description": "The heart of DataSec's operations. Massive server racks stretch in all directions, cooled by liquid nitrogen systems that hiss periodically. The constant hum of processing power is almost hypnotic. Security here is among the tightest in the city.",
+      "encounter_rate": 0.6,
+      "scan_encounter_rate": 0.8,
       "exits": {
-        "west": "uptown",
-        "south": "downtown",
-        "north": "daemon_lab"
-      }
+        "down": "executive_elevator"
+      },
+      "wild_daemons": [
+        {"id": "ice_guardian", "min_lvl": 15, "max_lvl": 20},
+        {"id": "neural_hunter", "min_lvl": 18, "max_lvl": 22}
+      ]
     },
-    "daemon_lab": {
-      "name": "Daemon Research Lab",
-      "description": "A high-security facility studying daemon code",
-      "encounter_rate": 60,
+    "research_wing": {
+      "name": "Research Wing",
+      "description": "A sterile laboratory environment where DataSec develops new digital weapons and defensive measures. Researchers in white coats monitor experiments in isolated chambers. Prototype daemons are contained in specialized debugging environments.",
+      "encounter_rate": 0.3,
+      "scan_encounter_rate": 0.5,
       "exits": {
-        "south": "central_hub"
-      }
+        "east": "corporate_plaza"
+      },
+      "wild_daemons": [
+        {"id": "prototype_daemon", "min_lvl": 10, "max_lvl": 15},
+        {"id": "glitch_anomaly", "min_lvl": 12, "max_lvl": 18}
+      ]
+    },
+    "datasphere_nexus": {
+      "name": "Datasphere Nexus",
+      "description": "A vast digital crossroads where data streams from across the world converge. Information takes on physical properties here, forming intricate patterns that shift and flow like cosmic nebulae. The very air crackles with potential knowledge.",
+      "encounter_rate": 0.7,
+      "scan_encounter_rate": 0.9,
+      "exits": {
+        "south": "digital_realm",
+        "east": "ai_consciousness",
+        "west": "memory_banks"
+      },
+      "wild_daemons": [
+        {"id": "data_leviathan", "min_lvl": 15, "max_lvl": 20},
+        {"id": "neural_hunter", "min_lvl": 17, "max_lvl": 22}
+      ]
+    },
+    "memory_banks": {
+      "name": "Memory Banks",
+      "description": "An ethereal archive where the Grid stores its oldest data. Information appears as ghostly imprints that respond to queries. The boundaries between past and present blur in this timeless repository of digital history.",
+      "encounter_rate": 0.2,
+      "scan_encounter_rate": 0.5,
+      "exits": {
+        "east": "datasphere_nexus"
+      },
+      "wild_daemons": [
+        {"id": "archive_sentinel", "min_lvl": 10, "max_lvl": 14},
+        {"id": "memory_specter", "min_lvl": 12, "max_lvl": 16}
+      ]
+    },
+    "ai_consciousness": {
+      "name": "AI Consciousness",
+      "description": "The restricted domain where artificial intelligences evolve and communicate. The environment here constantly shifts in response to the thoughts of its inhabitants. Entering this space feels like being immersed in a collective dream.",
+      "encounter_rate": 0.5,
+      "scan_encounter_rate": 0.7,
+      "exits": {
+        "west": "datasphere_nexus"
+      },
+      "wild_daemons": [
+        {"id": "sentient_code", "min_lvl": 18, "max_lvl": 25},
+        {"id": "neural_anomaly", "min_lvl": 20, "max_lvl": 28}
+      ]
+    },
+    "firewall_checkpoint": {
+      "name": "Firewall Checkpoint",
+      "description": "A massive digital barrier that separates the public Grid from corporate servers. Security protocols manifest as red laser grids and scanning beams. Sentinel programs patrol the perimeter, analyzing all who approach for unauthorized access attempts.",
+      "encounter_rate": 0.8,
+      "scan_encounter_rate": 0.9,
+      "exits": {
+        "west": "digital_realm",
+        "east": "corporate_intranet"
+      },
+      "wild_daemons": [
+        {"id": "ice_guardian", "min_lvl": 12, "max_lvl": 16},
+        {"id": "security_module", "min_lvl": 14, "max_lvl": 18}
+      ]
+    },
+    "corporate_intranet": {
+      "name": "Corporate Intranet",
+      "description": "The private network of Zion Corporation. Data here is structured in rigid hierarchies and protected by multi-layered encryption. The digital architecture mimics the company's headquarters, with towering firewalls and secured data vaults.",
+      "encounter_rate": 0.7,
+      "scan_encounter_rate": 0.8,
+      "exits": {
+        "west": "firewall_checkpoint",
+        "north": "zion_mainframe"
+      },
+      "wild_daemons": [
+        {"id": "zion_sentinel", "min_lvl": 18, "max_lvl": 22},
+        {"id": "encryption_beast", "min_lvl": 20, "max_lvl": 25}
+      ]
+    },
+    "zion_mainframe": {
+      "name": "Zion Mainframe",
+      "description": "The core system of the most powerful corporation in the digital world. The architecture here is unlike anything else on the Grid - a perfect fusion of mathematical precision and artistic beauty. The secrets of the digital realm may be hidden within.",
+      "encounter_rate": 0.9,
+      "scan_encounter_rate": 1.0,
+      "exits": {
+        "south": "corporate_intranet"
+      },
+      "wild_daemons": [
+        {"id": "system_administrator", "min_lvl": 30, "max_lvl": 35},
+        {"id": "neuromancer_fragment", "min_lvl": 40, "max_lvl": 50}
+      ]
     }
   }
 }
