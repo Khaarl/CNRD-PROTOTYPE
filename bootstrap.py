@@ -46,8 +46,11 @@ def ensure_directories_exist():
             logging.info(f"Created directory: {directory}")
 
 def run_game_with_error_handling():
-    """Run the game with global error handling"""
+    """Run the game with error handling and crash reporting."""
     try:
+        # Fix: Import game module and call the 'main' function that exists
+        import game
+        # The game.py has a function named 'main', not a class, so call it directly
         game.main()
     except KeyboardInterrupt:
         logging.info("Game interrupted by user (CTRL+C)")

@@ -120,7 +120,57 @@ class Program:
         )
 
 class Daemon:
-    """A daemon that can be captured and used in battle"""
+    """
+    Daemon class represents a program daemon in the CNRD game.
+    """
+    
+    def __init__(self, name, description=""):
+        self.name = name
+        self.description = description
+        self.programs = []
+        self.is_active = False
+        
+    def add_program(self, program):
+        """
+        Add a program to this daemon.
+        
+        Args:
+            program: The Program object to add to this daemon
+        """
+        if program is None:
+            raise ValueError("Cannot add None as a program")
+        self.programs.append(program)
+        return True
+    
+    def remove_program(self, program_name):
+        """
+        Remove a program from this daemon by name.
+        
+        Args:
+            program_name: The name of the program to remove
+        """
+        for program in self.programs:
+            if program.name == program_name:
+                self.programs.remove(program)
+                return True
+        return False
+    
+    def get_programs(self):
+        """
+        Get all programs associated with this daemon.
+        
+        Returns:
+            List of Program objects
+        """
+        return self.programs
+    
+    def activate(self):
+        """Activate this daemon"""
+        self.is_active = True
+    
+    def deactivate(self):
+        """Deactivate this daemon"""
+        self.is_active = False
 
     def __init__(self, name, types, level=1, base_hp=0, base_attack=0,
                  base_defense=0, base_speed=0, base_special=0, capture_rate=100, programs=None):
