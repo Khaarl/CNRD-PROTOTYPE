@@ -38,5 +38,21 @@
     "type": "CRYPTO",
     "effect": "special",
     "description": "Scrambles target's code to lower their attack"
+  },
+  "GHOST_TOUCH": {
+    "name": "Ghost Touch",
+    "power": 40,
+    "accuracy": 100,
+    "type": "GHOST",
+    "effect": "damage",
+    "description": "A ghostly touch that bypasses most defenses"
+  },
+  "SHELL_SMASH": {
+    "name": "Shell Smash",
+    "power": 50,
+    "accuracy": 90,
+    "type": "SHELL",
+    "effect": "damage",
+    "description": "Smashes through protective layers with brutal force"
   }
 }

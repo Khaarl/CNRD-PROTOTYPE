@@ -599,7 +599,8 @@ def main(): # Explicitly ensure zero indentation
     log_dir = 'logs'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    log_file = os.path.join(log_dir, 'game.log')
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    log_file = os.path.join(log_dir, f'cnrd_{timestamp}.log')
 
     logging.basicConfig(
         filename=log_file,
@@ -639,13 +640,13 @@ def main(): # Explicitly ensure zero indentation
         if player_data:
             player = Player.from_dict(player_data, world_map)
             logging.info(f"Loaded player: {player.name}")
+            # Additional validation to ensure player location exists
             if player.location not in world_map:
                 logging.warning(f"Loaded player location '{player.location}' invalid. Resetting.")
                 player.location = start_location_id
-                if start_location_id not in world_map:
-                     logging.critical("Start location invalid after reset! Cannot proceed.")
-                     pygame.quit()
-                     sys.exit(1)
+            elif world_map.get(player.location) is None:
+                logging.warning(f"Loaded player location '{player.location}' not found in world map. Resetting.")
+                player.location = start_location_id
         else:
              logging.info(f"No save found for {player_name}, creating new player.")
     except Exception as e:

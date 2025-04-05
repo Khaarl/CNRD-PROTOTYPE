@@ -1,5 +1,28 @@
 # CNRD Prototype Development Log
 
+## 2025-04-15: Bug Fix - Circuit_wraith Daemon & Legacy Type Format
+
+Fixed critical issues with the game logs that were causing crashes and warnings:
+
+1. **Added Missing Circuit_wraith Daemon**:
+   - Implemented the "circuit_wraith" daemon that was appearing in encounters but wasn't defined in daemons.json
+   - Added proper stats, types (GHOST and SHELL), and a balanced learnset
+   - Created associated programs: GHOST_TOUCH and SHELL_SMASH with appropriate power levels and effects
+   - Fixed encounter crashes in the Maintenance Tunnel location where this daemon appears
+
+2. **Removed Legacy Type Format Warnings**:
+   - Updated all daemon definitions to use the modern "types" array format instead of the deprecated "daemon_type" string
+   - Ensured backward compatibility by keeping the daemon_type field in the to_dict() serialization
+   - This standardization eliminates conversion warnings in the logs while maintaining compatibility with older save files
+
+3. **Player Location Validation**:
+   - Enhanced player location validation when loading saved games
+   - Fixed a bug where 'home' was being used as a location ID despite not existing in the current map
+   - Added proper fallback to start_location_id when an invalid location is detected
+   - Improved error logging with specific warning messages about invalid locations
+
+These fixes ensure the expanded map system works correctly without crashes, allowing players to properly explore all 24 locations including the recently added Maintenance Tunnel area.
+
 ## 2025-04-14: Map Expansion & Location Enhancements
 
 Significantly expanded the game world and enhanced location descriptions to create a more immersive cyberpunk experience:

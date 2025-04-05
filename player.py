@@ -310,6 +310,26 @@ class Player:
 
         return player
 
+    def get_last_active_daemon(self):
+        """
+        Returns the last active daemon from the player's team.
+        If no daemon has been active yet, return the first healthy daemon.
+        """
+        if hasattr(self, 'active_daemon') and self.active_daemon is not None:
+            return self.active_daemon
+        
+        # Fallback to first healthy daemon if no active daemon set
+        for daemon in self.daemons:
+            if daemon.hp > 0:
+                return daemon
+        
+        # If no healthy daemon found, return first daemon regardless of health
+        if self.daemons:
+            return self.daemons[0]
+            
+        # Should never happen if game validation is working properly
+        return None
+
 # --- Example Player Creation (for testing if run directly) ---
 if __name__ == "__main__":
     # Need dummy Location and Daemon classes/objects for testing here

@@ -1,47 +1,87 @@
 {
   "virulet": {
-    "type": "VIRUS",
-    "hp": 20,
-    "attack": 12,
-    "defense": 8,
-    "speed": 10,
-    "special": 9,
-    "programs": ["DATA_SIPHON", "ENCRYPT_SHIELD"]
+    "name": "Virulet",
+    "types": ["VIRUS"],
+    "hp": 40,
+    "attack": 55,
+    "defense": 40,
+    "speed": 60,
+    "special": 50,
+    "capture_rate": 45,
+    "learnset": {
+      "1": ["DATA_SIPHON"],
+      "5": ["ENCRYPT_SHIELD"]
+    }
   },
   "pyrowall": {
-    "type": "FIREWALL",
+    "name": "Pyrowall",
+    "types": ["FIREWALL"],
     "hp": 18,
     "attack": 9,
     "defense": 12,
     "speed": 8,
     "special": 11,
-    "programs": ["FIREWALL_BASH", "ENCRYPT_SHIELD"]
+    "capture_rate": 50,
+    "learnset": {
+      "1": ["FIREWALL_BASH"],
+      "5": ["ENCRYPT_SHIELD"]
+    }
   },
   "aquabyte": {
-    "type": "CRYPTO",
+    "name": "Aquabyte",
+    "types": ["CRYPTO"],
     "hp": 19,
     "attack": 10,
     "defense": 10,
     "speed": 10,
     "special": 10,
-    "programs": ["DATA_SIPHON", "CRYPTO_SCRAMBLE"]
+    "capture_rate": 50,
+    "learnset": {
+      "1": ["DATA_SIPHON"],
+      "4": ["CRYPTO_SCRAMBLE"]
+    }
   },
   "rat_bot": {
-    "type": "TROJAN",
+    "name": "Rat Bot",
+    "types": ["TROJAN"],
     "hp": 15,
     "attack": 13,
     "defense": 7,
     "speed": 12,
     "special": 8,
-    "programs": ["EXPLOIT_CRACK", "DATA_SIPHON"]
+    "capture_rate": 70,
+    "learnset": {
+      "1": ["EXPLOIT_CRACK"],
+      "3": ["DATA_SIPHON"]
+    }
   },
   "glitch_sprite": {
-    "type": "VIRUS",
+    "name": "Glitch Sprite",
+    "types": ["VIRUS"],
     "hp": 17,
     "attack": 8,
     "defense": 9,
     "speed": 15,
     "special": 12,
-    "programs": ["DATA_SIPHON", "EXPLOIT_CRACK"]
+    "capture_rate": 65,
+    "learnset": {
+      "1": ["DATA_SIPHON"],
+      "4": ["EXPLOIT_CRACK"]
+    }
+  },
+  "circuit_wraith": {
+    "name": "Circuit Wraith",
+    "types": ["GHOST", "SHELL"],
+    "hp": 45,
+    "attack": 52,
+    "defense": 38,
+    "speed": 65,
+    "special": 60,
+    "capture_rate": 35,
+    "learnset": {
+      "1": ["GHOST_TOUCH"],
+      "4": ["SHELL_SMASH"],
+      "7": ["DATA_SIPHON"]
+    }
   }
 }
