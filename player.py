@@ -3,7 +3,7 @@ import json
 import os
 import random
 from pathlib import Path
-from daemon import Daemon, Program
+# Import daemon module components when needed to avoid circular imports
 
 class Player:
     """Player class representing the user in the CNRD game."""
@@ -30,119 +30,49 @@ class Player:
             "CyberPunks": 0
         }
     
-    def create_starter_daemon(self, daemon_name):
-        """Create a starter daemon for the player."""
-        starter_daemons = {
-            "virulet": {
-                "name": "Virulet",
-                "level": 5,
-                "types": ["VIRUS"],
-                "base_stats": {
-                    "hp": 22,
-                    "attack": 15,
-                    "defense": 12,
-                    "speed": 15,
-                    "special": 12
-                },
-                "programs": [
-                    {
-                        "name": "Data Corruption",
-                        "power": 40,
-                        "accuracy": 95,
-                        "program_type": "VIRUS",
-                        "effect": "damage"
-                    },
-                    {
-                        "name": "Memory Leak",
-                        "power": 30,
-                        "accuracy": 100,
-                        "program_type": "VIRUS",
-                        "effect": "status:CORRUPTED"
-                    }
-                ]
-            },
-            "pyrowall": {
-                "name": "Pyrowall",
-                "level": 5,
-                "types": ["FIREWALL"],
-                "base_stats": {
-                    "hp": 25,
-                    "attack": 12,
-                    "defense": 18,
-                    "speed": 10,
-                    "special": 13
-                },
-                "programs": [
-                    {
-                        "name": "Packet Block",
-                        "power": 45,
-                        "accuracy": 90,
-                        "program_type": "FIREWALL",
-                        "effect": "damage"
-                    },
-                    {
-                        "name": "Port Shield",
-                        "power": 0,
-                        "accuracy": 100,
-                        "program_type": "FIREWALL",
-                        "effect": "defend:1.5"
-                    }
-                ]
-            },
-            "aquabyte": {
-                "name": "Aquabyte",
-                "level": 5,
-                "types": ["CRYPTO"],
-                "base_stats": {
-                    "hp": 20,
-                    "attack": 13,
-                    "defense": 13,
-                    "speed": 14,
-                    "special": 18
-                },
-                "programs": [
-                    {
-                        "name": "Hash Collision",
-                        "power": 40,
-                        "accuracy": 95,
-                        "program_type": "CRYPTO",
-                        "effect": "damage"
-                    },
-                    {
-                        "name": "Key Scramble",
-                        "power": 0,
-                        "accuracy": 90,
-                        "program_type": "CRYPTO",
-                        "effect": "status:LOCKED"
-                    }
-                ]
-            }
+    def create_starter_daemon(self, daemon_type):
+        """Create a starter daemon for the player"""
+        from daemon import Daemon, Program
+        
+        # Default base stats for starters
+        base_stats = {
+            "virulet": {"hp": 45, "attack": 55, "defense": 40, "speed": 60, "special": 50, "types": ["VIRUS"]},
+            "pyrowall": {"hp": 45, "attack": 45, "defense": 65, "speed": 45, "special": 50, "types": ["FIREWALL"]},
+            "aquabyte": {"hp": 45, "attack": 50, "defense": 50, "speed": 50, "special": 55, "types": ["CRYPTO"]}
         }
         
-        if daemon_name.lower() not in starter_daemons:
-            logging.warning(f"Invalid starter daemon name: {daemon_name}")
-            return None
+        stats = base_stats.get(daemon_type.lower())
+        if not stats:
+            # Default to virulet if type not found
+            stats = base_stats["virulet"]
         
-        starter_info = starter_daemons[daemon_name.lower()]
-        
-        # Create program objects
+        # Create starter programs
         programs = []
-        for prog_data in starter_info["programs"]:
-            program = Program(
-                name=prog_data["name"],
-                power=prog_data["power"],
-                accuracy=prog_data["accuracy"],
-                program_type=prog_data["program_type"],
-                effect=prog_data["effect"]
-            )
-            programs.append(program)
+        try:
+            if daemon_type.lower() == "virulet":
+                programs.append(Program(1, "Data Siphon", 40, 95, "VIRUS", "damage", "Drains data from the target"))
+                programs.append(Program(2, "Infect", 30, 100, "VIRUS", "special", "Infects the target with status effects"))
+            elif daemon_type.lower() == "pyrowall":
+                programs.append(Program(3, "Firewall", 40, 95, "FIREWALL", "damage", "Attacks with a wall of fire"))
+                programs.append(Program(4, "Defense Protocol", 0, 100, "FIREWALL", "defend", "Increases defense"))
+            elif daemon_type.lower() == "aquabyte":
+                programs.append(Program(5, "Encryption", 40, 95, "CRYPTO", "damage", "Attacks with encrypted data"))
+                programs.append(Program(6, "Decrypt", 30, 100, "CRYPTO", "special", "Weakens target's defenses"))
+        except Exception as e:
+            logging.error(f"Error creating starter programs: {e}")
+            # Fall back to a basic program if there's an error
+            programs = [Program(0, "Basic Attack", 40, 95, stats["types"][0], "damage", "A basic attack")]
         
         # Create and return the daemon
         daemon = Daemon(
-            name=starter_info["name"],
-            level=starter_info["level"],
-            types=starter_info["types"],
-            base_stats=starter_info["base_stats"],
+            name=daemon_type.capitalize(),
+            types=stats["types"],
+            level=5,
+            base_hp=stats["hp"],
+            base_attack=stats["attack"],
+            base_defense=stats["defense"],
+            base_speed=stats["speed"],
+            base_special=stats["special"],
             programs=programs
         )
         

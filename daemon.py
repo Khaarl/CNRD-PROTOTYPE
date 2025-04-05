@@ -124,54 +124,6 @@ class Daemon:
     Daemon class represents a program daemon in the CNRD game.
     """
     
-    def __init__(self, name, description=""):
-        self.name = name
-        self.description = description
-        self.programs = []
-        self.is_active = False
-        
-    def add_program(self, program):
-        """
-        Add a program to this daemon.
-        
-        Args:
-            program: The Program object to add to this daemon
-        """
-        if program is None:
-            raise ValueError("Cannot add None as a program")
-        self.programs.append(program)
-        return True
-    
-    def remove_program(self, program_name):
-        """
-        Remove a program from this daemon by name.
-        
-        Args:
-            program_name: The name of the program to remove
-        """
-        for program in self.programs:
-            if program.name == program_name:
-                self.programs.remove(program)
-                return True
-        return False
-    
-    def get_programs(self):
-        """
-        Get all programs associated with this daemon.
-        
-        Returns:
-            List of Program objects
-        """
-        return self.programs
-    
-    def activate(self):
-        """Activate this daemon"""
-        self.is_active = True
-    
-    def deactivate(self):
-        """Deactivate this daemon"""
-        self.is_active = False
-
     def __init__(self, name, types, level=1, base_hp=0, base_attack=0,
                  base_defense=0, base_speed=0, base_special=0, capture_rate=100, programs=None):
         """
@@ -189,14 +141,15 @@ class Daemon:
             programs (list[Program]): List of starting programs.
         """
         self.name = name
-        self.types = types # Changed from daemon_type
+        self.types = types if isinstance(types, list) else [types]
         self.level = level
         self.base_hp = base_hp
         self.base_attack = base_attack
         self.base_defense = base_defense
         self.base_speed = base_speed
         self.base_special = base_special
-        self.capture_rate = capture_rate # Added capture rate
+        self.capture_rate = capture_rate
+        self.programs = programs if programs is not None else []
 
         # Calculate actual stats based on level
         self._calculate_stats()
@@ -208,11 +161,107 @@ class Daemon:
         self.xp = 0
         self.xp_needed = self._calculate_xp_needed()
 
-        # Programs (moves)
-        self.programs = programs if programs is not None else []
-
         # Status effect
         self.status_effect = None # e.g., "PARALYZED", "POISONED", None
+        
+    @classmethod
+    def create_from_base(cls, base_id, level=1, custom_name=None):
+        """
+        Create a daemon from a base type ID.
+        
+        Args:
+            base_id (str): The base daemon ID (e.g., "virulet", "pyrowall")
+            level (int): The level for the new daemon
+            custom_name (str): Optional custom name for the daemon
+            
+        Returns:
+            Daemon: A new Daemon instance with appropriate stats and programs
+        """
+        # Define base stats for standard daemons
+        base_stats = {
+            "virulet": {
+                "name": "Virulet",
+                "types": ["VIRUS"],
+                "base_hp": 45,
+                "base_attack": 55,
+                "base_defense": 40,
+                "base_speed": 60,
+                "base_special": 50,
+                "capture_rate": 45,
+                "programs": [
+                    Program(1, "Data Siphon", 40, 95, "VIRUS", "damage", "Drains data from the target"),
+                    Program(2, "Infect", 30, 100, "VIRUS", "special", "Infects the target with status effects")
+                ]
+            },
+            "pyrowall": {
+                "name": "Pyrowall",
+                "types": ["FIREWALL"],
+                "base_hp": 45, 
+                "base_attack": 45,
+                "base_defense": 65,
+                "base_speed": 45,
+                "base_special": 50,
+                "capture_rate": 45,
+                "programs": [
+                    Program(3, "Firewall", 40, 95, "FIREWALL", "damage", "Attacks with a wall of fire"),
+                    Program(4, "Defense Protocol", 0, 100, "FIREWALL", "defend", "Increases defense")
+                ]
+            },
+            "aquabyte": {
+                "name": "Aquabyte",
+                "types": ["CRYPTO"],
+                "base_hp": 45,
+                "base_attack": 50, 
+                "base_defense": 50,
+                "base_speed": 50,
+                "base_special": 55,
+                "capture_rate": 45,
+                "programs": [
+                    Program(5, "Encryption", 40, 95, "CRYPTO", "damage", "Attacks with encrypted data"),
+                    Program(6, "Decrypt", 30, 100, "CRYPTO", "special", "Weakens target's defenses")
+                ]
+            }
+        }
+        
+        # Check if the base_id exists in our definitions
+        if base_id.lower() not in base_stats:
+            logging.error(f"Unknown daemon base ID: {base_id}")
+            # Default to virulet if base_id not found
+            base_id = "virulet"
+            
+        # Get the base stats for this daemon type
+        stats = base_stats[base_id.lower()]
+        
+        # Create the daemon
+        name = custom_name if custom_name else stats["name"]
+        daemon = cls(
+            name=name,
+            types=stats["types"],
+            level=level,
+            base_hp=stats["base_hp"],
+            base_attack=stats["base_attack"],
+            base_defense=stats["base_defense"],
+            base_speed=stats["base_speed"],
+            base_special=stats["base_special"],
+            capture_rate=stats["capture_rate"],
+            programs=stats["programs"]
+        )
+        
+        return daemon
+
+    def add_program(self, program):
+        """
+        Add a program to this daemon.
+        
+        Args:
+            program: The Program object to add to this daemon
+        Returns:
+            bool: True if program was added successfully
+        """
+        if program is None:
+            raise ValueError("Cannot add None as a program")
+        self.programs.append(program)
+        return True
 
     def _calculate_stats(self):
         """Calculate the daemon's stats based on base stats and level"""

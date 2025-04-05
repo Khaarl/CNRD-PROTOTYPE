@@ -3,6 +3,7 @@ import sys
 import logging
 import json
 from pathlib import Path
+import traceback
 
 # Import game modules
 from player import Player
@@ -12,11 +13,23 @@ from main_menu import MainMenu
 from daemon import Daemon
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='game.log'
-)
+def setup_logging():
+    """Setup logging configuration"""
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    log_file = log_dir / "game.log"
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    return logging.getLogger("CNRD")
 
 class Game:
     def __init__(self):
@@ -34,21 +47,6 @@ class Game:
         """Main game loop"""
         self.initialize()
         
-        # Show main menu and handle selection
-        menu = MainMenu(self)
-        menu_result = menu.run()
-        
-        # Process menu selection
-        if menu_result["action"] == "new_game":
-            self.start_new_game(menu_result["player_name"])
-        elif menu_result["action"] == "load_game":
-            self.load_game(menu_result["save_file"])
-        elif menu_result["action"] == "quick_fight":
-            self.start_quick_fight()
-            # Return to main menu after quick fight
-            self.run()
-            return
-            
         # Main game loop
         while self.running:
             self.display_current_location()
@@ -105,7 +103,6 @@ class Game:
             logging.error(f"Error loading game: {e}", exc_info=True)
             print(f"Error loading game: {e}")
             input("Press Enter to return to main menu...")
-            self.run()
             
     def start_quick_fight(self):
         """Start a test battle for quick gameplay"""
@@ -247,15 +244,46 @@ class Game:
     def return_to_menu(self):
         """Save and return to main menu"""
         self.save_game()
-        self.run()  # Restart from menu
 
-# Start game if run directly
-if __name__ == "__main__":
-    game = Game()
+def main():
+    """Main entry point for the game"""
+    logger = setup_logging()
+    logger.info("Starting CNRD Prototype")
+    
     try:
-        game.run()
+        # Initialize game object (minimal initialization for menu)
+        game_instance = Game()
+        
+        # Create and run the main menu
+        menu = MainMenu(game_instance)
+        menu_result = menu.run()
+        
+        logger.info(f"Main menu returned: {menu_result}")
+        
+        # Handle menu result
+        if menu_result["action"] == "new_game":
+            logger.info(f"Starting new game with player name: {menu_result['player_name']}")
+            game_instance.start_new_game(menu_result["player_name"])
+            game_instance.run()
+            
+        elif menu_result["action"] == "load_game":
+            logger.info(f"Loading game from: {menu_result['save_file']}")
+            game_instance.load_game(menu_result["save_file"])
+            game_instance.run()
+            
+        elif menu_result["action"] == "quick_fight":
+            logger.info("Starting quick fight")
+            game_instance.start_quick_fight()
+            game_instance.run()
+            
     except Exception as e:
-        logging.critical(f"Unhandled exception: {e}", exc_info=True)
-        print(f"Unhandled exception: {e}")
+        logger.error(f"Error in game: {e}")
+        logger.error(traceback.format_exc())
+        print(f"\nError: {e}")
+        print("The game crashed. Check the logs for details.")
         input("Press Enter to exit...")
-        sys.exit(1)
+        
+    logger.info("Game session ended")
+
+if __name__ == "__main__":
+    main()
