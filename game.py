@@ -3,12 +3,25 @@ import os
 import random
 import logging
 from pathlib import Path
+import pygame # Import Pygame
+import time # For potential delays
 
 # Local imports - alphabetical order
 from daemon import Daemon, Program, TYPE_CHART, STATUS_EFFECTS
 from data_manager import load_game_data, load_game, save_game
 from location import Location
 from player import Player
+
+# Pygame Constants
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
 
 # Global game data (populated by initialize_game)
 DAEMON_BASE_STATS = {}
@@ -63,6 +76,191 @@ def initialize_game():
 
     return start_location_id # Just return the start ID
 
+# --- Helper Functions ---
+def draw_text(surface, text, font, color, x, y):
+    """Helper function to draw text on a surface."""
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.topleft = (x, y)
+    surface.blit(text_surface, text_rect)
+
+# Global combat log
+combat_log = []
+
+def add_combat_log(message):
+    """Adds a message to the combat log."""
+    logging.info(f"Combat Log: {message}") # Also log it
+    combat_log.append(message)
+    # Optional: Limit log size
+    MAX_LOG_SIZE = 20 # Limit log to prevent excessive memory use
+    if len(combat_log) > MAX_LOG_SIZE:
+        combat_log.pop(0)
+
+# --- Drawing Functions ---
+def draw_roaming(screen, font, player, location, world_map):
+    """Draws the UI for the roaming state."""
+    screen.fill(BLACK) # Clear screen
+
+    # Draw Location Info
+    draw_text(screen, f"Location: {location.name}", font, WHITE, 10, 10)
+    # Basic word wrapping for description
+    desc_lines = []
+    words = location.description.split(' ')
+    current_line = ""
+    max_line_width = SCREEN_WIDTH - 20 # Allow some padding
+    for word in words:
+        test_line = current_line + word + " "
+        test_surface = font.render(test_line, True, WHITE)
+        if test_surface.get_width() < max_line_width:
+            current_line = test_line
+        else:
+            desc_lines.append(current_line)
+            current_line = word + " "
+    desc_lines.append(current_line) # Add the last line
+
+    y_offset = 50
+    for line in desc_lines:
+        draw_text(screen, line.strip(), font, WHITE, 10, y_offset)
+        y_offset += font.get_linesize()
+
+    # Draw Exits
+    y_offset += 20 # Add some space
+    draw_text(screen, "Exits:", font, WHITE, 10, y_offset)
+    y_offset += font.get_linesize()
+    if location.exits:
+        for direction, dest_id in location.exits.items():
+            dest_name = world_map.get(dest_id, Location(dest_id, "Unknown Area", "", {})).name # Safer lookup
+            draw_text(screen, f"- {direction.capitalize()}: {dest_name}", font, WHITE, 20, y_offset)
+            y_offset += font.get_linesize()
+    else:
+        draw_text(screen, "  None", font, WHITE, 20, y_offset)
+
+    # TODO: Draw Player Status (simplified for now)
+    y_offset = SCREEN_HEIGHT - 50
+    active_daemon = player.get_active_daemon()
+    status_text = f"Player: {player.name} | Active: {active_daemon.name if active_daemon else 'None'}"
+    draw_text(screen, status_text, font, WHITE, 10, y_offset)
+
+    # Draw Command Prompts
+    y_offset = SCREEN_HEIGHT - 100 # Move prompts up a bit
+    draw_text(screen, "Actions:", font, WHITE, 10, y_offset)
+    y_offset += font.get_linesize()
+    draw_text(screen, "- Move: [Arrow Keys]", font, WHITE, 20, y_offset)
+    # TODO: Add prompts for other actions (Scan [S], Train [T], Status [C], Daemons [D], Save [V], Quit [Q]) once input is handled
+
+def draw_hp_bar(surface, x, y, width, height, current_hp, max_hp):
+    """Draws a health bar."""
+    if max_hp <= 0: return # Avoid division by zero
+    # Ensure current_hp doesn't exceed max_hp for drawing
+    current_hp = min(current_hp, max_hp)
+    fill_pct = current_hp / max_hp
+    fill_width = int(width * fill_pct)
+
+    # Border
+    border_rect = pygame.Rect(x, y, width, height)
+    pygame.draw.rect(surface, WHITE, border_rect, 2)
+
+    # Fill color based on HP percentage
+    if fill_pct > 0.6:
+        fill_color = GREEN
+    elif fill_pct > 0.3:
+        fill_color = YELLOW
+    else:
+        fill_color = RED
+
+    # Fill rectangle (ensure width is at least 0)
+    if fill_width > 0:
+        fill_rect = pygame.Rect(x + 1, y + 1, fill_width - 2, height - 2) # Inset fill slightly
+        pygame.draw.rect(surface, fill_color, fill_rect)
+
+def draw_combat(screen, font, player, player_daemon, enemy_daemon):
+    """Draws the UI for the combat state."""
+    screen.fill(BLACK)
+
+    # --- Enemy Area (Top Right) ---
+    enemy_area_x = SCREEN_WIDTH * 0.55
+    enemy_area_y = 20
+    draw_text(screen, f"{enemy_daemon.name} (Lv.{enemy_daemon.level})", font, WHITE, enemy_area_x, enemy_area_y)
+    draw_hp_bar(screen, enemy_area_x, enemy_area_y + 35, 200, 20, enemy_daemon.hp, enemy_daemon.max_hp)
+    draw_text(screen, f"HP: {enemy_daemon.hp}/{enemy_daemon.max_hp}", font, WHITE, enemy_area_x, enemy_area_y + 60)
+    if enemy_daemon.status_effect:
+        draw_text(screen, f"Status: {enemy_daemon.status_effect}", font, RED, enemy_area_x, enemy_area_y + 85)
+    # TODO: Draw enemy sprite placeholder (e.g., a simple rect)
+    pygame.draw.rect(screen, RED, (enemy_area_x + 50, enemy_area_y + 120, 100, 100), 1)
+
+
+    # --- Player Area (Bottom Left) ---
+    player_area_x = 30
+    player_area_y = SCREEN_HEIGHT - 180
+    # Use player_daemon which could be the last active one if current is fainted
+    draw_text(screen, f"{player_daemon.name} (Lv.{player_daemon.level})", font, WHITE, player_area_x, player_area_y)
+    draw_hp_bar(screen, player_area_x, player_area_y + 35, 200, 20, player_daemon.hp, player_daemon.max_hp)
+    draw_text(screen, f"HP: {player_daemon.hp}/{player_daemon.max_hp}", font, WHITE, player_area_x, player_area_y + 60)
+    if player_daemon.status_effect:
+        draw_text(screen, f"Status: {player_daemon.status_effect}", font, RED, player_area_x, player_area_y + 85)
+    # TODO: Draw player sprite placeholder
+    pygame.draw.rect(screen, GREEN, (player_area_x + 50, player_area_y - 120, 100, 100), 1)
+
+
+    # --- Action/Info Area (Bottom Right) ---
+    menu_x = SCREEN_WIDTH * 0.5
+    menu_y = SCREEN_HEIGHT - 150
+    menu_width = SCREEN_WIDTH * 0.45
+    menu_height = 130
+
+    # Draw menu box
+    menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
+    pygame.draw.rect(screen, BLUE, menu_rect, 3) # Blue border
+
+    # Draw content based on combat sub-state
+    if combat_sub_state == "player_choose_action":
+        draw_text(screen, "Actions:", font, WHITE, menu_x + 10, menu_y + 10)
+        draw_text(screen, "[F]ight", font, WHITE, menu_x + 20, menu_y + 40)
+        draw_text(screen, "[S]witch", font, WHITE, menu_x + 20, menu_y + 70)
+        draw_text(screen, "[C]apture", font, WHITE, menu_x + 180, menu_y + 40)
+        draw_text(screen, "[R]un", font, WHITE, menu_x + 180, menu_y + 70)
+    elif combat_sub_state == "player_choose_program":
+        draw_text(screen, "Choose Program:", font, WHITE, menu_x + 10, menu_y + 10)
+        if player_daemon.programs:
+            for i, prog in enumerate(player_daemon.programs):
+                 # Simple two-column layout
+                 col = i % 2
+                 row = i // 2
+                 prog_text = f"{i+1}. {prog.name}"
+                 draw_text(screen, prog_text, font, WHITE, menu_x + 20 + col * 180, menu_y + 40 + row * 30)
+            # Add back option
+            draw_text(screen, "0. Back", font, WHITE, menu_x + 20, menu_y + 40 + ((len(player_daemon.programs) + 1) // 2) * 30)
+        else:
+            draw_text(screen, "No programs available!", font, RED, menu_x + 20, menu_y + 40)
+            draw_text(screen, "0. Back", font, WHITE, menu_x + 20, menu_y + 70)
+    elif combat_sub_state == "player_action_execute":
+        draw_text(screen, "Executing action...", font, WHITE, menu_x + 10, menu_y + 10)
+    elif combat_sub_state == "enemy_turn":
+        draw_text(screen, "Enemy's turn...", font, WHITE, menu_x + 10, menu_y + 10)
+    elif combat_sub_state == "apply_status_effects":
+        draw_text(screen, "Applying status effects...", font, WHITE, menu_x + 10, menu_y + 10)
+    elif combat_sub_state == "combat_end_check":
+         draw_text(screen, "Checking combat result...", font, WHITE, menu_x + 10, menu_y + 10)
+    elif combat_sub_state == "combat_fled":
+         draw_text(screen, "Got away safely!", font, WHITE, menu_x + 10, menu_y + 10)
+    # TODO: Add drawing for other sub-states (switch, capture result, combat end messages)
+
+
+    # --- Message Log Area (Middle Bottom) ---
+    log_x = 10
+    log_y = SCREEN_HEIGHT - 250 # Position above player area and menu
+    log_height = 100
+    log_max_lines = 4 # Number of lines to show
+
+    # Draw log box
+    log_rect = pygame.Rect(log_x, log_y, SCREEN_WIDTH - 20, log_height)
+    pygame.draw.rect(screen, BLUE, log_rect, 1) # Thin border
+
+    # Draw messages (newest at bottom)
+    start_index = max(0, len(combat_log) - log_max_lines)
+    for i, message in enumerate(combat_log[start_index:]):
+         draw_text(screen, message, font, WHITE, log_x + 5, log_y + 5 + i * font.get_linesize())
+
 def create_daemon(daemon_id, level=1):
     """Create a new daemon object from the base stats based on its ID and level."""
     if daemon_id not in DAEMON_BASE_STATS:
@@ -74,10 +272,10 @@ def create_daemon(daemon_id, level=1):
     # Create programs for the daemon based on learnset and level
     daemon_programs = []
     learnset = base_stats.get("learnset", {}) # Learnset should be like {"1": ["prog1"], "5": ["prog2"]}
-    
+
     # Track if we found valid programs for this daemon
     found_valid_programs = False
-    
+
     for lvl_str, program_ids in learnset.items():
         try:
             learn_level = int(lvl_str)
@@ -114,10 +312,10 @@ def create_daemon(daemon_id, level=1):
         # Get primary type from daemon
         daemon_types = base_stats.get("types", [])
         primary_type = daemon_types[0] if isinstance(daemon_types, list) and daemon_types else base_stats.get("type", "UNTYPED")
-        
+
         # Add default damage program based on type
         default_program_id = None
-        
+
         # Map types to default program IDs
         type_program_map = {
             "VIRUS": "data_siphon",
@@ -129,13 +327,13 @@ def create_daemon(daemon_id, level=1):
             "GHOST": "ghost_touch",
             "UNTYPED": "basic_attack"
         }
-        
+
         # Get default program ID based on daemon type
         if primary_type.upper() in type_program_map:
             default_program_id = type_program_map[primary_type.upper()]
         else:
             default_program_id = "basic_attack"  # Fallback
-        
+
         # Check if default program exists in PROGRAMS, otherwise use backup
         if default_program_id in PROGRAMS:
             program_data = PROGRAMS[default_program_id]
@@ -150,7 +348,7 @@ def create_daemon(daemon_id, level=1):
                 "description": "A basic attack."
             }
             default_program_id = "basic_attack"
-        
+
         # Create and add default program
         default_program = Program(
             default_program_id,
@@ -182,460 +380,218 @@ def create_daemon(daemon_id, level=1):
         programs=daemon_programs
     )
 
-# --- Combat Function ---
-def run_combat(player, enemy_daemon):
-    """Handles the turn-based combat loop.
-    Returns:
-        str: Combat outcome ("player_win", "enemy_win", "run", "capture")
-    """
-    logging.info(f"Combat started: Player vs {enemy_daemon.name} (Lv.{enemy_daemon.level})")
-    print("\n" + "!" * 10 + f" Wild {enemy_daemon.name} (Lv.{enemy_daemon.level}) appeared! " + "!" * 10)
+# --- Combat Turn Handlers ---
 
-    player_active_daemon = player.get_active_daemon()
-    if not player_active_daemon:
-        print("You have no conscious Daemons to fight with!")
-        logging.warning("Combat started with no active player daemon.")
-        return "run" # Treat as running away immediately
+def handle_player_action_execute(player, player_daemon, enemy_daemon, action, program):
+    """Executes the chosen player action and returns the next sub-state."""
+    global combat_sub_state # Need to modify global state
 
-    print(f"Go, {player_active_daemon.name}!")
+    if action == "fight":
+        if program:
+            result = player_daemon.use_program(program, enemy_daemon)
+            add_combat_log(result["message"])
 
-    combat_state = "ongoing" # ongoing, player_win, enemy_win, run, capture
+            if result["hit"] and result["damage"] is not None:
+                # Calculate type effectiveness for display message
+                multiplier = 1.0
+                for target_type in enemy_daemon.types:
+                    type_key = program.type.upper()
+                    target_key = target_type.upper()
+                    if type_key in TYPE_CHART and target_key in TYPE_CHART[type_key]:
+                        multiplier *= TYPE_CHART[type_key][target_key]
 
-    while combat_state == "ongoing":
-        print("\n" + "-" * 20)
-        print(f"Enemy: {enemy_daemon.name} (Lv.{enemy_daemon.level}) HP: {enemy_daemon.hp}/{enemy_daemon.max_hp}")
-        if enemy_daemon.status_effect: print(f"       Status: {enemy_daemon.status_effect}")
-        print(f"Your : {player_active_daemon.name} (Lv.{player_active_daemon.level}) HP: {player_active_daemon.hp}/{player_active_daemon.max_hp}")
-        if player_active_daemon.status_effect: print(f"       Status: {player_active_daemon.status_effect}")
-        print("-" * 20)
+                # Show effectiveness message
+                if multiplier > 1.5: add_combat_log("It's super effective!")
+                elif 0 < multiplier < 0.6: add_combat_log("It's not very effective...")
+                elif multiplier == 0: add_combat_log("It has no effect...")
 
-        # --- Player Turn ---
-        action_chosen = False
-        player_action = None
-        selected_program = None
-        target_daemon = None # For switching
+                # Apply damage
+                if enemy_daemon.take_damage(result["damage"]):
+                    add_combat_log(f"{enemy_daemon.name} fainted!")
+                    return "combat_end_check" # Combat might be over
 
-        # Check if player daemon can act based on status effects
-        can_act = True
-        if player_active_daemon.status_effect == "LOCKED":
-            # 30% chance of being unable to act when LOCKED
-            if random.random() < 0.3:
-                print(f"{player_active_daemon.name} is LOCKED and unable to act this turn!")
-                can_act = False
-                player_action = "locked" # Skip turn
-                action_chosen = True
-            else:
-                print(f"{player_active_daemon.name} fights against the LOCK!") 
-
-        while not action_chosen:
-            print("\nChoose action:")
-            print("  [F]ight")
-            print("  [S]witch Daemon")
-            print("  [C]apture")
-            print("  [R]un")
-            choice = input("> ").lower().strip()
-
-            if choice == 'f':
-                # Choose program
-                print("Choose program:")
-                if not player_active_daemon.programs:
-                    print("  No programs available!")
-                    continue
-                for i, prog in enumerate(player_active_daemon.programs):
-                    print(f"  {i+1}. {prog.name} ({prog.type}, Pow:{prog.power}, Acc:{prog.accuracy})")
-                print("  0. Back")
-                prog_choice = input("> ").strip()
-                if prog_choice.isdigit():
-                    prog_idx = int(prog_choice) - 1
-                    if 0 <= prog_idx < len(player_active_daemon.programs):
-                        player_action = "fight"
-                        selected_program = player_active_daemon.programs[prog_idx]
-                        action_chosen = True
-                    elif prog_idx == -1: # Back option
-                        continue
-                    else:
-                        print("Invalid program number.")
-                else:
-                    print("Invalid input.")
-
-            elif choice == 's':
-                available_daemons = player.get_healthy_daemons(exclude=player_active_daemon)
-                if not available_daemons:
-                    print("No other conscious Daemons to switch to!")
-                    continue
-                print("Switch to which Daemon?")
-                for i, d in enumerate(available_daemons):
-                    print(f"  {i+1}. {d.name} (Lv.{d.level}) HP: {d.hp}/{d.max_hp}")
-                print("  0. Back")
-                switch_choice = input("> ").strip()
-                if switch_choice.isdigit():
-                    switch_idx = int(switch_choice) - 1
-                    if 0 <= switch_idx < len(available_daemons):
-                        player_action = "switch"
-                        target_daemon = available_daemons[switch_idx]
-                        action_chosen = True
-                    elif switch_idx == -1: # Back option
-                        continue
-                    else:
-                        print("Invalid daemon number.")
-                else:
-                    print("Invalid input.")
-
-            elif choice == 'c':
-                # Basic capture logic
-                player_action = "capture"
-                action_chosen = True
-
-            elif choice == 'r':
-                # Simple run logic for now
-                player_action = "run"
-                action_chosen = True # Assume success for now against wild
-
-            else:
-                print("Invalid choice.")
-
-        # --- Enemy Turn (Simple AI) ---
-        # Check if enemy can act based on status effects
-        enemy_can_act = True
-        enemy_action = "locked" # Default to locked (will be changed if can act)
-        enemy_program = None # Initialize to None to avoid undefined variable issue
-        
-        if enemy_daemon.status_effect == "LOCKED":
-            # 30% chance of being unable to act when LOCKED
-            if random.random() < 0.3:
-                print(f"{enemy_daemon.name} is LOCKED and unable to act this turn!")
-                enemy_can_act = False
-            else:
-                print(f"{enemy_daemon.name} fights against the LOCK!")
-                enemy_can_act = True
-        
-        # If enemy can act, determine its action
-        if enemy_can_act:
-            # Improved enemy AI: choose highest damage program if HP low, otherwise random
-            enemy_action = "fight"
-            if enemy_daemon.programs:
-                if enemy_daemon.hp < enemy_daemon.max_hp * 0.3:
-                    # Find highest power program for aggressive behavior when low HP
-                    best_program = max(enemy_daemon.programs, key=lambda p: p.power)
-                    enemy_program = best_program
-                else:
-                    # Otherwise random choice
-                    enemy_program = random.choice(enemy_daemon.programs)
-            else:
-                 enemy_action = "struggle" # Or some default action if no programs
-                 # enemy_program remains None
-
-        # --- Determine Turn Order ---
-        player_goes_first = player_active_daemon.speed >= enemy_daemon.speed
-
-        # Apply status effect modifiers
-        if player_active_daemon.status_effect == "LAGGING":
-            # Speed reduced when LAGGING
-            player_goes_first = False
-            
-        # --- Execute Turns ---
-        participants = [(player, player_active_daemon, player_action, selected_program, target_daemon),
-                        (None, enemy_daemon, enemy_action, enemy_program, None)] # None for player indicates enemy
-        if not player_goes_first:
-            participants.reverse()
-
-        for current_player, current_daemon, action, program, switch_target in participants:
-            if combat_state != "ongoing": break # Stop if combat ended mid-turn
-            if current_daemon.is_fainted(): continue # Skip turn if fainted before action
-
-            is_player_turn = (current_player is not None)
-            opponent = enemy_daemon if is_player_turn else player_active_daemon
-
-            print("-" * 10)
-            
-            # Skip turn if locked and failed to break free (handled above)
-            if action == "locked":
-                print(f"{current_daemon.name}'s turn was skipped due to being LOCKED!")
-                continue
-
-            if action == "fight":
-                if program:
-                    result = current_daemon.use_program(program, opponent)
-                    print(result["message"])
-                    
-                    if result["hit"] and result["damage"] is not None:
-                        # Calculate type effectiveness for display message
-                        multiplier = 1.0
-                        for target_type in opponent.types:
-                            type_key = program.type.upper()
-                            target_key = target_type.upper()
-                            if type_key in TYPE_CHART and target_key in TYPE_CHART[type_key]:
-                                multiplier *= TYPE_CHART[type_key][target_key]
-                        
-                        # Show effectiveness message
-                        if multiplier > 1.5:
-                            print("It's super effective!")
-                        elif 0 < multiplier < 0.6: 
-                            print("It's not very effective...")
-                        elif multiplier == 0:
-                            print("It has no effect...")
-                            
-                        # Apply damage
-                        if opponent.take_damage(result["damage"]):
-                            print(f"{opponent.name} fainted!")
-                            combat_state = "player_win" if is_player_turn else "enemy_win"
-                            # Don't break here yet, let the other participant act if they haven't
-                    
-                    # Handle status effects from special programs
-                    if result["effect_applied"] and "status" in result["effect_applied"]:
-                        status_type = result["effect_applied"].split(":")[1] 
-                        if status_type in STATUS_EFFECTS:
-                            opponent.status_effect = status_type
-                            print(f"{opponent.name} was afflicted with {status_type}!")
-                else:
-                    # Basic "Struggle" if no programs
-                    print(f"{current_daemon.name} flailed wildly!")
-                    # Simple typeless damage
-                    struggle_damage = max(1, int(current_daemon.attack / 4))
-                    if opponent.take_damage(struggle_damage):
-                         print(f"{opponent.name} fainted!")
-                         combat_state = "player_win" if is_player_turn else "enemy_win"
-
-
-            elif action == "switch":
-                if is_player_turn:
-                    # Check if switch_target is already fainted (shouldn't happen with get_healthy_daemons)
-                    if switch_target.is_fainted():
-                         print(f"{switch_target.name} is already fainted!")
-                         # Force player to choose again? For now, just skip turn.
-                         print(f"{current_daemon.name}'s turn was skipped.")
-                    else:
-                         player_active_daemon = switch_target
-                         player.set_active_daemon(player_active_daemon) # Assumes Player class has this method
-                         print(f"You switched to {player_active_daemon.name}!")
-                else:
-                    # Enemy switch logic (not implemented for simple AI)
-                    pass
-
-            elif action == "capture":
-                 # Calculate catch chance (simplified from design doc)
-                max_hp = enemy_daemon.max_hp
-                current_hp = enemy_daemon.hp
-                base_rate = enemy_daemon.capture_rate # Lower is harder
-                # More HP missing = higher chance. Max factor is 1 when HP is 1/3 or less.
-                hp_factor = max(0.1, (max_hp * 3 - current_hp * 2) / (max_hp * 3))
-                
-                # Status bonus - update to use proper status effects 
-                status_bonus = 1.0
-                if enemy_daemon.status_effect:
-                    # Give bonuses based on status
-                    if enemy_daemon.status_effect == "LOCKED":
-                        status_bonus = 2.0  # Easier to capture when locked
-                    elif enemy_daemon.status_effect == "CORRUPTED":
-                        status_bonus = 1.7  # Easier when losing HP
-                    else:
-                        status_bonus = 1.5  # Other status effects
-
-                # Simplified chance calculation (adjust divisor for balance)
-                catch_chance = min(1.0, (base_rate / 255.0) * hp_factor * status_bonus)
-
-                print(f"Attempting capture... (Chance: {catch_chance:.2f})")
-                if random.random() < catch_chance:
-                    print(f"Gotcha! {enemy_daemon.name} was captured!")
-                    # Create a copy for the player, don't give the actual enemy object
-                    captured_daemon = Daemon.from_dict(enemy_daemon.to_dict())
-                    player.add_daemon(captured_daemon) # Assumes Player class has add_daemon
-                    combat_state = "capture" # Use distinct state for capture
-                    # No XP for capture? Or maybe some? Design decision.
-                else:
-                    print(f"Oh no! The Daemon broke free!")
-                    # Enemy gets its turn after failed capture attempt (handled by loop structure)
-
-            elif action == "run":
-                if is_player_turn:
-                    # Base flee chance of 90% for wild battles
-                    flee_chance = 0.9
-                    
-                    # Modify flee chance based on speed comparison
-                    speed_ratio = player_active_daemon.speed / max(1, enemy_daemon.speed)
-                    flee_chance *= speed_ratio
-                    
-                    if random.random() < flee_chance:
-                        print("You ran away safely!")
-                        combat_state = "run"
-                    else:
-                        print("Couldn't get away!")
-                else:
-                    # Enemy doesn't run in this simple AI
-                    pass
-
-            # Check if opponent fainted AFTER the action, if combat still ongoing
-            if opponent.is_fainted() and combat_state == "ongoing":
-                 print(f"{opponent.name} fainted!")
-                 combat_state = "player_win" if is_player_turn else "enemy_win"
-
-            # End of participant's turn processing
-            if combat_state != "ongoing": break # Exit inner loop if combat ended
-
-        # --- End of Turn ---
-        # Apply status effects
-        if combat_state == "ongoing":
-            # Player daemon status effects
-            if player_active_daemon.status_effect == "CORRUPTED":
-                damage = max(1, int(player_active_daemon.max_hp / 16))  # 1/16 of max HP
-                print(f"{player_active_daemon.name} is damaged by CORRUPTION! (-{damage} HP)")
-                if player_active_daemon.take_damage(damage):
-                    print(f"{player_active_daemon.name} fainted from CORRUPTION!")
-                    combat_state = "enemy_win"
-            
-            # Enemy daemon status effects
-            if combat_state == "ongoing" and enemy_daemon.status_effect == "CORRUPTED":
-                damage = max(1, int(enemy_daemon.max_hp / 16))  # 1/16 of max HP
-                print(f"{enemy_daemon.name} is damaged by CORRUPTION! (-{damage} HP)")
-                if enemy_daemon.take_damage(damage):
-                    combat_state = "player_win"
-
-        # Check if player needs to switch after their daemon fainted mid-round
-        if player_active_daemon.is_fainted() and combat_state == "ongoing":
-             print(f"{player_active_daemon.name} fainted!")
-             player_active_daemon = player.get_active_daemon() # Check if another is auto-selected or prompt
-             if not player_active_daemon:
-                  print("You have no more conscious Daemons!")
-                  combat_state = "enemy_win" # Player loses
-             else:
-                  # Need to prompt player to switch
-                  print("You need to switch to another Daemon.")
-                  available_daemons = player.get_healthy_daemons()
-                  if not available_daemons: # Should not happen if get_active_daemon worked, but safety check
-                       print("Error: No healthy daemons available despite check.")
-                       combat_state = "enemy_win"
-                  else:
-                       while True:
-                            print("Switch to which Daemon?")
-                            for i, d in enumerate(available_daemons):
-                                print(f"  {i+1}. {d.name} (Lv.{d.level}) HP: {d.hp}/{d.max_hp}")
-                            switch_choice = input("> ").strip()
-                            if switch_choice.isdigit():
-                                switch_idx = int(switch_choice) - 1
-                                if 0 <= switch_idx < len(available_daemons):
-                                    player_active_daemon = available_daemons[switch_idx]
-                                    player.set_active_daemon(player_active_daemon)
-                                    print(f"Go, {player_active_daemon.name}!")
-                                    break # Valid switch made
-                                else:
-                                    print("Invalid daemon number.")
-                            else:
-                                print("Invalid input.")
-
-
-    # --- Combat End ---
-    if combat_state == "player_win":
-        print(f"\nYou defeated {enemy_daemon.name}!")
-        # Award XP (simple: give to active daemon that participated)
-        # TODO: More complex XP calculation based on level difference & participation
-        xp_gain = enemy_daemon.level * 15 # Basic XP formula
-        # Ensure the final active daemon isn't fainted before giving XP
-        final_active = player.get_active_daemon()
-        if final_active and not final_active.is_fainted():
-             final_active.gain_xp(xp_gain)
+            # Handle status effects from special programs
+            if result["effect_applied"] and "status" in result["effect_applied"]:
+                status_type = result["effect_applied"].split(":")[1]
+                if status_type in STATUS_EFFECTS:
+                    enemy_daemon.status_effect = status_type
+                    add_combat_log(f"{enemy_daemon.name} was afflicted with {status_type}!")
         else:
-             # Maybe distribute XP to others later? For now, no XP if last one fainted.
-             logging.info("Last active daemon fainted, no XP awarded.")
+            # Basic "Struggle" if no programs
+            add_combat_log(f"{player_daemon.name} flailed wildly!")
+            struggle_damage = max(1, int(player_daemon.attack / 4))
+            if enemy_daemon.take_damage(struggle_damage):
+                 add_combat_log(f"{enemy_daemon.name} fainted!")
+                 return "combat_end_check" # Combat might be over
 
-    elif combat_state == "enemy_win":
-        print("\nYou were defeated...")
-        # TODO: Implement consequences (e.g., return to safe spot, lose creds)
-        print("You blacked out!") # Classic message
-    elif combat_state == "run":
-        pass # Message already printed during action
-    elif combat_state == "capture":
-        pass # Message already printed during action
+    elif action == "switch":
+        # TODO: Implement switch logic
+        add_combat_log("Switching... (Not fully implemented)")
+        pass # For now, just skip to enemy turn after attempting switch
+    elif action == "capture":
+        # TODO: Implement capture logic
+        add_combat_log("Attempting capture... (Not fully implemented)")
+        pass # For now, just skip to enemy turn after attempting capture
+    elif action == "run":
+        add_combat_log("Attempting to run...")
+        # Base flee chance of 90% for wild battles (adjust as needed)
+        flee_chance = 0.9
+        # Modify flee chance based on speed comparison
+        speed_ratio = player_daemon.speed / max(1, enemy_daemon.speed) # Avoid division by zero
+        flee_chance *= speed_ratio
+        flee_chance = min(1.0, flee_chance) # Cap at 100%
 
-    return combat_state # Return final status
+        if random.random() < flee_chance:
+            add_combat_log("Got away safely!")
+            return "combat_fled" # Transition to fled state
+        else:
+            add_combat_log("Couldn't get away!")
+            # If failed, proceed to enemy's turn
+
+    # After player action (if not run success), check if enemy fainted before proceeding to enemy turn
+    if enemy_daemon.is_fainted():
+        return "combat_end_check"
+
+    # If combat continues, move to enemy's turn
+    return "enemy_turn"
+
+def handle_enemy_turn(player_daemon, enemy_daemon):
+    """Handles the enemy's turn logic and returns the next sub-state."""
+    add_combat_log(f"--- {enemy_daemon.name}'s Turn ---")
+
+    # Check if enemy can act (e.g., status effects like LOCK)
+    if enemy_daemon.status_effect == "LOCKED":
+        if random.random() < 0.3:
+            add_combat_log(f"{enemy_daemon.name} is LOCKED and unable to act!")
+            return "apply_status_effects" # Skip action, go to status effects
+        else:
+            add_combat_log(f"{enemy_daemon.name} fights against the LOCK!")
+
+    # Simple AI: Choose highest damage program if low HP, otherwise random
+    enemy_program = None
+    if enemy_daemon.programs:
+        if enemy_daemon.hp < enemy_daemon.max_hp * 0.3:
+            enemy_program = max(enemy_daemon.programs, key=lambda p: p.power)
+        else:
+            enemy_program = random.choice(enemy_daemon.programs)
+
+    if enemy_program:
+        result = enemy_daemon.use_program(enemy_program, player_daemon)
+        add_combat_log(result["message"])
+
+        if result["hit"] and result["damage"] is not None:
+            # Calculate type effectiveness
+            multiplier = 1.0
+            for target_type in player_daemon.types:
+                type_key = enemy_program.type.upper()
+                target_key = target_type.upper()
+                if type_key in TYPE_CHART and target_key in TYPE_CHART[type_key]:
+                    multiplier *= TYPE_CHART[type_key][target_key]
+
+            if multiplier > 1.5: add_combat_log("It's super effective!")
+            elif 0 < multiplier < 0.6: add_combat_log("It's not very effective...")
+            elif multiplier == 0: add_combat_log("It has no effect...")
+
+            # Apply damage
+            if player_daemon.take_damage(result["damage"]):
+                add_combat_log(f"{player_daemon.name} fainted!")
+                return "combat_end_check" # Combat might be over
+
+        # Handle status effects
+        if result["effect_applied"] and "status" in result["effect_applied"]:
+            status_type = result["effect_applied"].split(":")[1]
+            if status_type in STATUS_EFFECTS:
+                player_daemon.status_effect = status_type
+                add_combat_log(f"{player_daemon.name} was afflicted with {status_type}!")
+    else:
+        # Struggle
+        add_combat_log(f"{enemy_daemon.name} flailed wildly!")
+        struggle_damage = max(1, int(enemy_daemon.attack / 4))
+        if player_daemon.take_damage(struggle_damage):
+             add_combat_log(f"{player_daemon.name} fainted!")
+             return "combat_end_check" # Combat might be over
+
+    # After enemy action, check if player fainted before proceeding
+    if player_daemon.is_fainted():
+        return "combat_end_check"
+
+    # Move to apply status effects phase
+    return "apply_status_effects"
+
+def handle_apply_status_effects(player_daemon, enemy_daemon):
+    """Applies end-of-turn status effects and returns the next sub-state."""
+    fainted_by_status = False
+
+    # Player daemon status effects
+    if player_daemon.status_effect == "CORRUPTED":
+        damage = max(1, int(player_daemon.max_hp / 16))
+        add_combat_log(f"{player_daemon.name} is damaged by CORRUPTION! (-{damage} HP)")
+        if player_daemon.take_damage(damage):
+            add_combat_log(f"{player_daemon.name} fainted from CORRUPTION!")
+            fainted_by_status = True
+
+    # Enemy daemon status effects (only if not already fainted)
+    if not enemy_daemon.is_fainted() and enemy_daemon.status_effect == "CORRUPTED":
+        damage = max(1, int(enemy_daemon.max_hp / 16))
+        add_combat_log(f"{enemy_daemon.name} is damaged by CORRUPTION! (-{damage} HP)")
+        if enemy_daemon.take_damage(damage):
+            add_combat_log(f"{enemy_daemon.name} fainted from CORRUPTION!")
+            fainted_by_status = True
+
+    if fainted_by_status:
+        return "combat_end_check"
+    else:
+        # Start next turn
+        add_combat_log("--- Your Turn ---") # Prompt for next turn
+        return "player_choose_action"
+
+def handle_combat_end_check(player, player_daemon, enemy_daemon):
+    """Checks if combat has ended and returns the next game_state or combat_sub_state."""
+    global game_state, current_enemy_daemon # Need to modify game state
+
+    player_lost = not player.get_active_daemon() # Check if ANY conscious daemons remain
+    enemy_lost = enemy_daemon.is_fainted()
+
+    if player_lost:
+        add_combat_log("You have no more conscious Daemons!")
+        add_combat_log("You blacked out!")
+        # TODO: Implement proper game over / return to safe spot logic
+        player.heal_all_daemons() # Simple recovery for now
+        game_state = "roaming" # Go back to roaming
+        # current_enemy_daemon = None # Cleared in main loop when game_state changes
+        return game_state # Return the main game state
+    elif enemy_lost:
+        add_combat_log(f"You defeated {enemy_daemon.name}!")
+        # Award XP
+        xp_gain = enemy_daemon.level * 15 # Basic XP
+        if player_daemon and not player_daemon.is_fainted(): # Ensure the one fighting gets XP
+             player_daemon.gain_xp(xp_gain)
+             add_combat_log(f"{player_daemon.name} gained {xp_gain} XP!")
+             # TODO: Add level up check and message
+        # TODO: Add potential item drops or other rewards
+        game_state = "roaming" # Go back to roaming
+        # current_enemy_daemon = None # Cleared in main loop when game_state changes
+        return game_state # Return the main game state
+    else:
+        # Combat continues, should not normally reach here if called correctly
+        logging.error("Entered combat_end_check but no one fainted?")
+        return "player_choose_action" # Fallback
+
+
+# --- Old Combat Function (Keep for reference or remove later) ---
+# def run_combat(player, enemy_daemon): ... (Original function content)
+
 
 def start_training_battle(player, difficulty="normal"):
     """
     Initialize a training battle with selected difficulty and daemon type.
-    
-    Args:
-        player: The player object
-        difficulty: "easy" (-2 levels), "normal" (same level), or "hard" (+2 levels)
-    
-    Returns:
-        Boolean indicating if the battle was successfully started
+    (Needs adaptation for Pygame UI)
     """
-    logging.info(f"Training battle requested with difficulty: {difficulty}")
-    
-    # Check if player has at least one healthy daemon
-    if not any(daemon.current_hp > 0 for daemon in player.daemons):
-        print("You need at least one healthy daemon to start training!")
-        logging.warning("Training battle canceled - no healthy daemons")
-        return False
-    
-    # Calculate level based on difficulty
-    avg_level = sum(d.level for d in player.daemons) // len(player.daemons)
-    level_modifier = {
-        "easy": -2,
-        "normal": 0,
-        "hard": +2
-    }.get(difficulty.lower(), 0)
-    
-    training_level = max(1, avg_level + level_modifier)
-    
-    # Get available daemons for training
-    available_daemons = list(DAEMON_BASE_STATS.keys())
-    
-    if not available_daemons:
-        print("No training daemons available. Check configuration files.")
-        logging.error("Training battle failed - no daemon configurations found")
-        return False
-    
-    # Display available daemon types
-    print("\nChoose opponent daemon type:")
-    for i, daemon_id in enumerate(available_daemons[:10]):  # Limit to first 10
-        daemon_name = DAEMON_BASE_STATS[daemon_id].get("name", daemon_id)
-        daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
-        print(f"{i+1}. {daemon_name} ({daemon_type})")
-    print(f"{len(available_daemons[:10])+1}. Random")
-    
-    daemon_choice = input("> ").strip()
-    
-    # Parse player's choice
-    selected_daemon_id = None
-    try:
-        if daemon_choice.isdigit():
-            choice_idx = int(daemon_choice) - 1
-            if 0 <= choice_idx < len(available_daemons[:10]):
-                selected_daemon_id = available_daemons[choice_idx]
-            elif choice_idx == len(available_daemons[:10]):
-                selected_daemon_id = random.choice(available_daemons)
-            else:
-                print("Invalid selection. Choosing random opponent.")
-                selected_daemon_id = random.choice(available_daemons)
-        else:
-            print("Invalid input. Choosing random opponent.")
-            selected_daemon_id = random.choice(available_daemons)
-    except Exception as e:
-        logging.error(f"Error selecting training daemon: {e}")
-        print("Error selecting daemon. Choosing random opponent.")
-        selected_daemon_id = random.choice(available_daemons)
-    
-    # Create the enemy daemon
-    try:
-        enemy_daemon = create_daemon(selected_daemon_id, level=training_level)
-        # Ensure it has programs
-        if not enemy_daemon.programs:
-            logging.warning(f"Training daemon {selected_daemon_id} had no programs, adding default ones")
-            enemy_daemon.programs = {"Basic Attack": {"power": 40, "type": enemy_daemon.types[0], "accuracy": 95}}
-        
-        print(f"\nStarting training battle against a level {training_level} {enemy_daemon.name}!")
-        
-        # Set training battle flag (for reduced XP and no capture)
-        global is_training_battle
-        is_training_battle = True
-        
-        # Start combat
-        return run_combat(player, enemy_daemon)
-    
-    except Exception as e:
-        logging.error(f"Failed to start training battle: {e}", exc_info=True)
-        print("Failed to start training battle. Please try again.")
-        return False
+    # ... (Keep existing logic for now, but it uses input()) ...
+    # This function needs to be refactored to use Pygame menus/states
+    logging.warning("start_training_battle needs refactoring for Pygame UI")
+    return False # Prevent use until refactored
+
 
 def main(): # Explicitly ensure zero indentation
     # Configure logging
@@ -658,409 +614,282 @@ def main(): # Explicitly ensure zero indentation
 
     logging.info("Game starting up")
 
+    # Initialize Pygame
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("CNRD - Pygame Edition")
+    clock = pygame.time.Clock()
+    font = pygame.font.Font(None, 36) # Default font
+
     # Initialize game data and get starting location ID
     try:
         start_location_id = initialize_game()
     except Exception as e:
         logging.critical(f"Failed to initialize game data: {e}", exc_info=True)
+        # TODO: Display error graphically instead of print
         print(f"CRITICAL ERROR during initialization: {e}. Check logs and config files.")
+        pygame.quit()
         sys.exit(1)
 
-    # Welcome message
-    print("\n" + "=" * 60)
-    print("Welcome to CNRD - Cyber Network Roguelike with Daemons")
-    print("=" * 60)
-
-    # Create player
-    player_name = input("\nEnter your username: ")
-
-    # Try to load saved game
+    # --- Player Loading/Creation (Temporary - needs graphical interface) ---
+    player_name = "karl" # Hardcode for now, or load default
     player = None
     try:
         player_data = load_game(player_name.lower())
         if player_data:
-            # Create player from saved data
-            player = Player.from_dict(player_data, world_map) # Pass world_map if needed by Player.from_dict
-            print(f"Welcome back, {player.name}!")
-            # Ensure player location is valid after loading
+            player = Player.from_dict(player_data, world_map)
+            logging.info(f"Loaded player: {player.name}")
             if player.location not in world_map:
-                logging.warning(f"Loaded player location '{player.location}' is invalid. Resetting to start location '{start_location_id}'.")
-                print(f"Warning: Your last saved location was corrupted. Moving you to a safe location.")
+                logging.warning(f"Loaded player location '{player.location}' invalid. Resetting.")
                 player.location = start_location_id
-                # Verify the start location exists
                 if start_location_id not in world_map:
-                    logging.critical(f"Start location ID '{start_location_id}' is also invalid! Cannot proceed.")
-                    print("CRITICAL ERROR: Game configuration is corrupted. Please contact support.")
-                    sys.exit(1)
+                     logging.critical("Start location invalid after reset! Cannot proceed.")
+                     pygame.quit()
+                     sys.exit(1)
+        else:
+             logging.info(f"No save found for {player_name}, creating new player.")
     except Exception as e:
         logging.error(f"Failed to load game for {player_name}: {e}", exc_info=True)
-        print(f"Error loading saved game: {e}. Starting a new game.")
+        logging.info("Starting a new game.")
 
     if player is None:
-        # Create new player
-        print(f"\nCreating new profile for {player_name}...")
-
-        # Choose starting daemon
-        print("\nChoose your starting daemon:")
-        print("1. Virulet (Malware type - balanced)") # Updated type based on daemon.py example
-        print("2. Pyrowall (Shell type - high defense)") # Assuming Shell type
-        print("3. Aquabyte (Encryption type - balanced)") # Assuming Encryption type
-
-        valid_choice = False
-        starter_daemon = None
-        starter_id = None
-
-        while not valid_choice:
-            choice = input("\nEnter your choice (1-3): ")
-
-            if choice == "1":
-                starter_id = "virulet"
-                valid_choice = True
-            elif choice == "2":
-                starter_id = "pyrowall"
-                valid_choice = True
-            elif choice == "3":
-                starter_id = "aquabyte"
-                valid_choice = True
-            else:
-                print("Invalid choice, please try again.")
-
-        if starter_id:
-             starter_daemon = create_daemon(starter_id, level=5)
-
-        # Ensure the chosen starter is not None before proceeding
+        # Create a default new player if loading failed or no save exists
+        starter_id = "virulet" # Default starter
+        starter_daemon = create_daemon(starter_id, level=5)
         if starter_daemon:
-            player = Player(player_name, start_location_id, [starter_daemon]) # Use start_location_id
-            print(f"\nWelcome, {player.name}! You've chosen {starter_daemon.name} as your starting daemon.")
+            player = Player(player_name, start_location_id, [starter_daemon])
+            logging.info(f"Created new player {player.name} with {starter_daemon.name}")
         else:
-            logging.critical(f"Failed to create starter daemon '{starter_id}'. Exiting.")
-            print(f"Error: Could not create your starting daemon '{starter_id}'. Please check config files.")
+            logging.critical(f"Failed to create default starter daemon '{starter_id}'. Exiting.")
+            # TODO: Display error graphically
+            pygame.quit()
             sys.exit(1)
+    # --- End Temporary Player Loading ---
 
     # Game state management
-    game_state = "roaming" # Possible states: roaming, combat
+    global game_state, current_enemy_daemon, combat_sub_state # Make global for modification
+    game_state = "roaming" # Possible states: roaming, combat, menu, etc.
     current_enemy_daemon = None # Holds the daemon for the current combat encounter
+    combat_sub_state = "player_choose_action" # For combat flow
+
+    # Variables to store player's combat choice between frames/states
+    player_chosen_action = None
+    player_selected_program = None
+    # player_selected_switch_target = None # For later
 
     # Game loop
     playing = True
     while playing:
-        # --- State: Roaming ---
-        if game_state == "roaming":
-            # Get current location object
-            current_loc_id = player.location
-            if current_loc_id not in world_map:
-                logging.error(f"Player location ID '{current_loc_id}' not found in world_map. Resetting to start.")
-                player.location = start_location_id
-                if not player.location or player.location not in world_map: # Still no valid location
-                     logging.critical("Cannot find any valid location after reset. Exiting.")
-                     print("CRITICAL ERROR: Cannot determine player location. Check config.")
-                     sys.exit(1)
-                current_loc_id = player.location
-
-            location = world_map[current_loc_id] # Get the Location object
-
-            # Display location info using Location object's method
-            location.display()
-
-            # Show available exits using Location object's exits
-            print("\nAvailable directions:")
-            if location.exits:
-                for direction, destination_id in location.exits.items():
-                    # Ensure destination exists before trying to access its name
-                    dest_name = world_map[destination_id].name if destination_id in world_map else "Unknown Area"
-                    print(f"- {direction.capitalize()}: {dest_name}")
-            else:
-                print("  None")
-
-            # Player commands
-            print("\nCommands: move [direction], scan, train, status, daemons, save, quit")
-            command_input = input("\nWhat would you like to do? ").lower().strip()
-            parts = command_input.split()
-            if not parts: continue
-            command = parts[0]
-            args = parts[1:]
-
-            if command == "move":
-                if not args:
-                    print("Move where? (e.g., move north)")
-                    continue
-                direction = args[0]
-
-                if direction in location.exits:
-                    destination_id = location.exits[direction]
-                    if destination_id in world_map:
-                        # Move player
-                        player.location = destination_id
-                        new_location = world_map[destination_id] # Get the new Location object
-                        print(f"Moving {direction} to {new_location.name}...")
-
-                        # --- Random Encounter Check ---
-                        if random.random() < new_location.encounter_rate:
-                            wild_info = new_location.get_random_wild_daemon_info()
-                            if wild_info:
-                                daemon_id = wild_info.get("id")
-                                min_lvl = wild_info.get("min_lvl", 1)
-                                max_lvl = wild_info.get("max_lvl", min_lvl) # Default max to min if missing
-                                level = random.randint(min_lvl, max_lvl)
-
-                                if not daemon_id:
-                                     logging.error(f"Wild daemon info in {new_location.name} is missing 'id': {wild_info}")
-                                else:
-                                     current_enemy_daemon = create_daemon(daemon_id, level)
-                                     if current_enemy_daemon:
-                                         game_state = "combat" # Switch state
-                                         # No need for combat options here, handled by the combat state block
-                                     else:
-                                         logging.error(f"Failed to create wild daemon '{daemon_id}' (Level {level}) for encounter in {new_location.name}.")
-                            else:
-                                logging.info(f"Encounter triggered in {new_location.name} but no wild_daemons defined or list is empty.")
-                    else:
-                        print(f"Error: Destination '{destination_id}' not found in world map.")
-                        logging.error(f"Exit '{direction}' in location '{current_loc_id}' points to invalid destination '{destination_id}'.")
-                else:
-                    print("You can't go that way.")
-
-            elif command == "train":
-                # Training fight implementation
-                print("\nInitiating training session...")
-                
-                # Check if player has at least one healthy daemon
-                if not player.get_active_daemon():
-                    print("You need at least one conscious daemon to train!")
-                    continue
-                
-                # Get all available enemy daemon types from the game data
-                available_daemons = list(DAEMON_BASE_STATS.keys())
-                if not available_daemons:
-                    print("No training daemons available in the system.")
-                    logging.error("No daemons found in DAEMON_BASE_STATS for training.")
-                    continue
-                
-                # Player can choose difficulty level
-                print("\nSelect training difficulty:")
-                print("1. Easy (Level 1-3)")
-                print("2. Medium (Level 4-7)")
-                print("3. Hard (Level 8-12)")
-                
-                difficulty_choice = input("> ").strip()
-                
-                # Set level range based on difficulty
-                if difficulty_choice == "1":
-                    min_level, max_level = 1, 3
-                elif difficulty_choice == "2":
-                    min_level, max_level = 4, 7
-                elif difficulty_choice == "3":
-                    min_level, max_level = 8, 12
-                else:
-                    print("Invalid choice. Defaulting to medium difficulty.")
-                    min_level, max_level = 4, 7
-                
-                # Let player choose daemon type or random
-                print("\nChoose opponent daemon type:")
-                for i, daemon_id in enumerate(available_daemons[:10]):  # Limit to first 10 for readability
-                    daemon_name = DAEMON_BASE_STATS[daemon_id].get("name", daemon_id)
-                    daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
-                    print(f"{i+1}. {daemon_name} ({daemon_type})")
-                print(f"{len(available_daemons[:10])+1}. Random")
-                
-                daemon_choice = input("> ").strip()
-                
-                # Parse player's choice
-                selected_daemon_id = None
-                if daemon_choice.isdigit():
-                    choice_idx = int(daemon_choice) - 1
-                    if 0 <= choice_idx < len(available_daemons[:10]):
-                        selected_daemon_id = available_daemons[choice_idx]
-                    elif choice_idx == len(available_daemons[:10]):
-                        selected_daemon_id = random.choice(available_daemons)
-                    else:
-                        selected_daemon_id = random.choice(available_daemons)
-                        print("Invalid choice. Selecting random daemon.")
-                else:
-                    selected_daemon_id = random.choice(available_daemons)
-                    print("Invalid choice. Selecting random daemon.")
-                
-                # Set daemon level
-                level = random.randint(min_level, max_level)
-                
-                # Create the enemy daemon
-                current_enemy_daemon = create_daemon(selected_daemon_id, level)
-                if current_enemy_daemon:
-                    print(f"\nCreating training session with {current_enemy_daemon.name} (Level {level})...")
-                    # Set to combat state
-                    game_state = "combat"
-                    logging.info(f"Training combat initiated with {selected_daemon_id} (Level {level})")
-                else:
-                    print(f"Error: Could not create training daemon '{selected_daemon_id}'.")
-                    logging.error(f"Failed to create training daemon '{selected_daemon_id}'")
-            
-            elif command == "scan":
-                print(f"Scanning {location.name}...")
-                
-                # Provide more detailed information about the area
-                print(f"\nDetailed scan of {location.name}:")
-                print(f"  {location.description}")
-                
-                # Check if this location has wild daemons defined
-                if location.wild_daemons:
-                    print("  Daemon signals detected in this area.")
-                    # Display potential daemon types in area
-                    daemon_types = set()
-                    for daemon_info in location.wild_daemons:
-                        daemon_id = daemon_info.get("id")
-                        if daemon_id in DAEMON_BASE_STATS:
-                            daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
-                            daemon_types.add(daemon_type)
-                    if daemon_types:
-                        print(f"  Type signature analysis: {', '.join(daemon_types)}")
-                else:
-                    print("  No daemon signals detected in this area.")
-                    
-                # Add a bit more detail about exits
-                if location.exits:
-                    print("\nDetailed exit analysis:")
-                    for direction, destination_id in location.exits.items():
-                        dest_name = world_map[destination_id].name if destination_id in world_map else "Unknown Area"
-                        print(f"  {direction.capitalize()} → {dest_name}")
-                
-                # FIXED: Ensure scan_encounter_rate is properly set and higher than normal rate
-                # Default to 60% chance or double the normal rate, whichever is higher
-                scan_encounter_rate = getattr(location, "scan_encounter_rate", 
-                                             max(0.6, location.encounter_rate * 2.0))
-                
-                # Log the encounter check for debugging
-                logging.info(f"Scan encounter check: rate={scan_encounter_rate}, location={location.name}")
-                
-                # --- Random Encounter Check for Scanning ---
-                if location.wild_daemons and random.random() < scan_encounter_rate:
-                    print("\nYour scanning activity has alerted nearby daemons!")
-                    wild_info = location.get_random_wild_daemon_info()
-                    if wild_info:
-                        daemon_id = wild_info.get("id")
-                        min_lvl = wild_info.get("min_lvl", 1)
-                        max_lvl = wild_info.get("max_lvl", min_lvl)
-                        # Scanning tends to attract slightly higher level daemons
-                        level_bonus = random.randint(0, 2)  # 0-2 level bonus
-                        level = min(max_lvl + level_bonus, max_lvl + 2)
-                        
-                        if daemon_id:
-                            current_enemy_daemon = create_daemon(daemon_id, level)
-                            if current_enemy_daemon:
-                                game_state = "combat"
-                                # Log successful encounter creation
-                                logging.info(f"Scan triggered encounter with {daemon_id} (Level {level})")
-                            else:
-                                logging.error(f"Failed to create wild daemon '{daemon_id}' during scan.")
-                    else:
-                        logging.info("Scan encounter triggered but no wild_daemons defined or list is empty.")
-                else:
-                    # If no daemon and it's a location that should have them, let player know scan was uneventful
-                    if location.wild_daemons:
-                        print("Your scan completed without triggering any encounters.")
-
-            elif command == "status":
-                player.display_status(world_map) # Pass world_map to display location name
-
-            elif command == "daemons":
-                 if not player.daemons:
-                      print("You have no Daemons.")
-                 else:
-                      print("\nYour Daemons:")
-                      for i, daemon in enumerate(player.daemons):
-                           print(f"\n--- Daemon {i+1} ---")
-                           daemon.display_summary() # Use the detailed display from Daemon class
-
-            elif command == "save":
-                try:
-                    success = save_game(player.to_dict(), player.name.lower())
-                    if success:
-                        print("Game saved successfully.")
-                    else:
-                        # save_game should log the error
-                        print("Error saving game. Check logs.")
-                except Exception as e:
-                    logging.error(f"Exception during save command: {e}", exc_info=True)
-                    print(f"An unexpected error occurred while saving: {e}")
-
-
-            elif command == "quit":
-                # Ask to save before quitting
-                save_choice = input("Save game before quitting? (y/n): ").lower()
-                if save_choice == 'y':
-                    try:
-                        success = save_game(player.to_dict(), player.name.lower())
-                        if success:
-                            print("Game saved successfully.")
-                        else:
-                            print("Error saving game. Check logs.")
-                    except Exception as e:
-                         logging.error(f"Exception during quit-save: {e}", exc_info=True)
-                         print(f"An unexpected error occurred while saving: {e}")
-
-                print("Thanks for playing CNRD!")
+        # --- Event Handling ---
+        # Input handling should only change state or set variables, not execute logic directly
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 playing = False
+            elif event.type == pygame.KEYDOWN:
+                if game_state == "roaming":
+                    direction = None
+                    if event.key == pygame.K_UP: direction = "north"
+                    elif event.key == pygame.K_DOWN: direction = "south"
+                    elif event.key == pygame.K_LEFT: direction = "west"
+                    elif event.key == pygame.K_RIGHT: direction = "east"
+                    # TODO: Add keys for Scan, Train, Status, Daemons, Save, Quit
 
+                    if direction:
+                        current_loc_id = player.location
+                        if current_loc_id in world_map:
+                            location = world_map[current_loc_id]
+                            if direction in location.exits:
+                                destination_id = location.exits[direction]
+                                if destination_id in world_map:
+                                    # Move player
+                                    player.location = destination_id
+                                    new_location = world_map[destination_id]
+                                    logging.info(f"Player moved {direction} to {new_location.name}")
+                                    # --- Random Encounter Check ---
+                                    if random.random() < new_location.encounter_rate:
+                                        wild_info = new_location.get_random_wild_daemon_info()
+                                        if wild_info:
+                                            daemon_id = wild_info.get("id")
+                                            min_lvl = wild_info.get("min_lvl", 1)
+                                            max_lvl = wild_info.get("max_lvl", min_lvl)
+                                            level = random.randint(min_lvl, max_lvl)
+                                            if daemon_id:
+                                                current_enemy_daemon = create_daemon(daemon_id, level)
+                                                if current_enemy_daemon:
+                                                    logging.info(f"Encounter! {current_enemy_daemon.name} (Lv.{level})")
+                                                    combat_log.clear() # Clear log for new battle
+                                                    add_combat_log(f"Wild {current_enemy_daemon.name} (Lv.{level}) appeared!")
+                                                    player_active = player.get_active_daemon()
+                                                    if player_active:
+                                                         add_combat_log(f"Go, {player_active.name}!")
+                                                    else:
+                                                         add_combat_log("No conscious daemons!")
+                                                         # TODO: Handle this case properly (force switch/run?)
+                                                    combat_sub_state = "player_choose_action" # Reset sub-state
+                                                    game_state = "combat" # Switch state
+                                                else:
+                                                    logging.error(f"Failed to create wild daemon '{daemon_id}'")
+                                else:
+                                    # No valid direction pressed for movement
+                                    pass
+                elif game_state == "combat":
+                    # Handle input based on combat sub-state (only when waiting for player input)
+                    if combat_sub_state == "player_choose_action":
+                        if event.key == pygame.K_f:
+                            add_combat_log("Choose program:")
+                            combat_sub_state = "player_choose_program"
+                        elif event.key == pygame.K_s:
+                            add_combat_log("Player chose Switch (Not implemented)")
+                            # TODO: Transition to 'player_choose_switch' sub-state
+                            # combat_sub_state = "player_choose_switch"
+                        elif event.key == pygame.K_c:
+                            add_combat_log("Player chose Capture (Not implemented)")
+                            player_chosen_action = "capture"
+                            combat_sub_state = "player_action_execute"
+                        elif event.key == pygame.K_r:
+                            # add_combat_log("Player chose Run") # Log moved to handler
+                            player_chosen_action = "run"
+                            combat_sub_state = "player_action_execute"
+
+                    elif combat_sub_state == "player_choose_program":
+                        player_daemon = player.get_active_daemon()
+                        if event.key == pygame.K_0: # Back option
+                            add_combat_log("Choose action:")
+                            combat_sub_state = "player_choose_action"
+                        elif pygame.K_1 <= event.key <= pygame.K_9:
+                            choice_index = event.key - pygame.K_1
+                            if player_daemon and 0 <= choice_index < len(player_daemon.programs):
+                                player_selected_program = player_daemon.programs[choice_index] # Store selected program
+                                player_chosen_action = "fight" # Store chosen action
+                                add_combat_log(f"Selected {player_selected_program.name}")
+                                combat_sub_state = "player_action_execute" # Move to execute state
+                            else:
+                                add_combat_log("Invalid program number.")
+                        else:
+                             add_combat_log("Invalid input (Use 1-9, 0).")
+
+                    # TODO: Add key handling for player_choose_switch sub-state
+
+                # TODO: Add key handling for other game states (menus)
+
+        # --- Game Logic Update (Runs every frame) ---
+        if game_state == "combat":
+            player_daemon = player.get_active_daemon() # Get current active daemon
+
+            # Execute player action if ready (and not waiting for input)
+            if combat_sub_state == "player_action_execute":
+                 if player_daemon and current_enemy_daemon and player_chosen_action:
+                      next_sub_state = handle_player_action_execute(
+                          player, player_daemon, current_enemy_daemon,
+                          player_chosen_action, player_selected_program
+                      )
+                      combat_sub_state = next_sub_state
+                      # Reset choices for next turn/state
+                      player_chosen_action = None
+                      player_selected_program = None
+                 else:
+                      logging.error("Entered player_action_execute without necessary data!")
+                      combat_sub_state = "player_choose_action" # Attempt recovery
+
+            # Handle enemy turn if it's their time
+            elif combat_sub_state == "enemy_turn":
+                 if player_daemon and current_enemy_daemon:
+                     next_sub_state = handle_enemy_turn(player_daemon, current_enemy_daemon)
+                     combat_sub_state = next_sub_state
+                 else:
+                     logging.error("Entered enemy_turn without necessary data!")
+                     combat_sub_state = "player_choose_action" # Attempt recovery
+
+            # Handle status effects application
+            elif combat_sub_state == "apply_status_effects":
+                 # Need player_daemon even if fainted for status check
+                 current_player_daemon_obj = player.get_active_daemon() or player.get_last_active_daemon()
+                 if current_player_daemon_obj and current_enemy_daemon:
+                     next_sub_state = handle_apply_status_effects(current_player_daemon_obj, current_enemy_daemon)
+                     combat_sub_state = next_sub_state
+                 else:
+                     logging.error("Entered apply_status_effects without necessary data!")
+                     combat_sub_state = "player_choose_action" # Attempt recovery
+
+            # Handle combat end check
+            elif combat_sub_state == "combat_end_check":
+                 # Need player_daemon even if fainted for XP check in handler
+                 current_player_daemon_obj = player.get_active_daemon() or player.get_last_active_daemon() # Get last active if current is None
+                 if player and current_player_daemon_obj and current_enemy_daemon:
+                     next_state = handle_combat_end_check(player, current_player_daemon_obj, current_enemy_daemon)
+                     if next_state in ["roaming", "game_over"]: # Check if it returned a main game state
+                         game_state = next_state
+                         if game_state == "roaming": current_enemy_daemon = None # Clear enemy only if returning to roaming
+                     else: # Otherwise, it returned a combat sub-state (shouldn't happen often here)
+                         combat_sub_state = next_state
+                 else:
+                     logging.error("Entered combat_end_check without necessary data!")
+                     game_state = "roaming" # Attempt recovery by going back to roaming
+                     current_enemy_daemon = None
+
+            # Handle transition after fleeing
+            elif combat_sub_state == "combat_fled":
+                 game_state = "roaming"
+                 current_enemy_daemon = None # Clear enemy
+
+
+        # Other game logic updates might go here later
+
+        # --- Drawing ---
+        screen.fill(BLACK) # Clear screen each frame
+
+        # Draw based on game state
+        if game_state == "roaming":
+            current_loc_id = player.location
+            if current_loc_id in world_map:
+                location = world_map[current_loc_id]
+                draw_roaming(screen, font, player, location, world_map)
             else:
-                print("Unknown command. Try 'move [direction]', 'status', 'daemons', 'save', or 'quit'.")
+                # Handle invalid location graphically
+                screen.fill(BLACK)
+                draw_text(screen, f"ERROR: Invalid Location ID {current_loc_id}", font, RED, 10, 10)
 
-        # --- State: Combat ---
         elif game_state == "combat":
-            if not current_enemy_daemon:
-                 logging.error("Entered combat state but current_enemy_daemon is None.")
-                 print("Combat initialization error. Returning to exploration mode.")
-                 game_state = "roaming" # Recover by going back to roaming
-                 continue
+            player_daemon = player.get_active_daemon()
+            # Need to handle case where player might not have *any* active daemon if last one fainted from status
+            last_active_daemon = player.get_last_active_daemon() # Get potentially fainted daemon for drawing
+            active_or_last_daemon = player_daemon or last_active_daemon
 
-            # Ensure player has an active daemon before starting combat turn
-            if not player.get_active_daemon():
-                 print("You have no conscious Daemons left!")
-                 combat_result = "enemy_win" # Treat as immediate loss if no daemon available
+            if not active_or_last_daemon and not player.get_healthy_daemons():
+                 # If no healthy daemons left at all, combat should end immediately (handled by end_check)
+                 draw_text(screen, "All Daemons Fainted!", font, RED, 100, 100)
+            elif active_or_last_daemon and current_enemy_daemon:
+                 # Draw using the active one if available, otherwise the last one (likely fainted)
+                 draw_combat(screen, font, player, active_or_last_daemon, current_enemy_daemon)
+            elif not current_enemy_daemon:
+                 # Enemy fainted, combat should be ending (or we fled)
+                 # The main loop logic should transition game_state back to roaming quickly
+                 # We might briefly see this if drawing happens before state change processes
+                 if combat_sub_state == "combat_fled":
+                      draw_text(screen, "Got away safely!", font, WHITE, 100, 100)
+                 else:
+                      draw_text(screen, "Enemy Fainted!", font, GREEN, 100, 100)
             else:
-                 # Additional validation before starting combat
-                 try:
-                     # Verify enemy daemon is properly initialized
-                     if not hasattr(current_enemy_daemon, 'hp') or current_enemy_daemon.hp <= 0:
-                         raise AttributeError("Enemy daemon has invalid health")
-                     if not hasattr(current_enemy_daemon, 'name'):
-                         raise AttributeError("Enemy daemon has no name attribute")
-                     
-                     combat_result = run_combat(player, current_enemy_daemon)
-                 except Exception as e:
-                     logging.error(f"Combat system error: {e}", exc_info=True)
-                     print("An error occurred during combat. Returning to exploration.")
-                     combat_result = "player_flee"  # Graceful exit from combat
+                 # Should ideally be handled by forcing switch or ending combat
+                 screen.fill(BLACK)
+                 error_msg = "ERROR: Combat drawing error - inconsistent state!"
+                 draw_text(screen, error_msg, font, RED, 10, 10)
 
-            # Handle combat outcome
-            if combat_result == "enemy_win":
-                 # Player lost - implement consequences (e.g., game over or return to safe spot)
-                 print("\nReturning to the last safe point...") # Placeholder consequence
-                 # Find a safe location (e.g., encounter_rate 0 or a specific tagged location)
-                 safe_loc_id = start_location_id # Default to start for now
-                 # Find first location with 0 encounter rate
-                 found_safe = False
-                 for loc_id, loc in world_map.items():
-                      if loc.encounter_rate == 0:
-                           safe_loc_id = loc_id
-                           found_safe = True
-                           break
-                 if not found_safe:
-                      logging.warning("No location with encounter_rate 0 found. Returning to absolute start.")
 
-                 player.location = safe_loc_id
-                 # Heal player's daemons?
-                 player.heal_all_daemons() # Assumes Player class has this method
-                 print("Your Daemons have been stabilized.")
+        # TODO: Add drawing for other states (menu, title, etc.)
 
-            # Reset state after combat
-            current_enemy_daemon = None
-            game_state = "roaming"
+        # --- Update Display ---
+        pygame.display.flip()
 
-        # --- Other States (e.g., menu, dialogue) ---
-        else:
-             logging.error(f"Unhandled game state: {game_state}")
-             game_state = "roaming" # Attempt recovery
+        # --- Cap Frame Rate ---
+        clock.tick(FPS)
 
+    # --- Game Exit ---
     logging.info("Game shutting down")
+    # TODO: Add save prompt before quitting
+    pygame.quit()
+    sys.exit()
+
 
 if __name__ == "__main__":
     # Ensure necessary directories exist before starting

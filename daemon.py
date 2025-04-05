@@ -350,10 +350,21 @@ class Daemon:
     @classmethod
     def from_dict(cls, data):
         """Create a Daemon from a dictionary"""
+        # Handle type backward compatibility (list 'types' vs string 'daemon_type')
+        daemon_types = data.get("types")
+        if not isinstance(daemon_types, list) or not daemon_types: # Check if 'types' is missing or not a non-empty list
+            old_type = data.get("daemon_type") # Check for the old key
+            if isinstance(old_type, str):
+                daemon_types = [old_type] # Convert old string to list
+                logging.warning(f"Loaded daemon '{data.get('name')}' using legacy 'daemon_type'. Converted to types: {daemon_types}")
+            else:
+                daemon_types = ["UNKNOWN"] # Default if neither is valid
+                logging.error(f"Could not determine type for daemon '{data.get('name')}'. Defaulting to UNKNOWN.")
+
         # First create the daemon without programs
         daemon = cls(
             data["name"],
-            data["types"], # Changed from daemon_type
+            daemon_types, # Use the determined types list
             data["level"],
             data["base_hp"],
             data["base_attack"],
