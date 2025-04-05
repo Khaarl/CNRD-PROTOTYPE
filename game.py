@@ -410,6 +410,9 @@ def draw_main_menu(screen, font, selected_index):
             
             # Pulsing border
             border_color = list(CYAN)
+            if len(border_color) == 3:  # If border_color is RGB (3 elements)
+                border_color = list(border_color) + [255]  # Convert to RGBA by adding alpha
+            
             border_color[3] = int(155 + 100 * pulse)  # Pulsing alpha
             pygame.draw.rect(screen, border_color, box_rect, 2)
             

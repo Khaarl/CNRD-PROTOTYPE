@@ -1,0 +1,24 @@
+==================================================
+CNRD CRASH REPORT
+==================================================
+
+Time: 2025-04-05 17:40:25
+Python version: 3.10.5 (tags/v3.10.5:f377153, Jun  6 2022, 16:14:13) [MSC v.1929 64 bit (AMD64)]
+
+Exception details:
+Type: IndexError
+Message: list assignment index out of range
+
+Traceback:
+Traceback (most recent call last):
+  File "D:\PROJECTS\CNRD PROTOTYPE\bootstrap.py", line 51, in run_game_with_error_handling
+    game.main()
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 1098, in main
+    draw_main_menu(screen, font, menu_selected_index)
+  File "D:\PROJECTS\CNRD PROTOTYPE\game.py", line 413, in draw_main_menu
+    border_color[3] = int(155 + 100 * pulse)  # Pulsing alpha
+IndexError: list assignment index out of range
+
+Game State Information:
+game_state: main_menu
+in_combat: False
