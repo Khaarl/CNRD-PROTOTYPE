@@ -163,6 +163,10 @@ class Player:
             print("Error: Player's current location not found in world map.")
             return False # Cannot move if current location is invalid
 
+        # Add detailed logging for debugging
+        logging.debug(f"Current location ID: '{self.location}' | Name: '{current_loc.name}'")
+        logging.debug(f"Available exits: {current_loc.exits}")
+
         if direction in current_loc.exits:
             destination_id = current_loc.exits[direction]
             if destination_id in world_map:
@@ -176,6 +180,8 @@ class Player:
                 print(f"Error: Destination location ID '{destination_id}' not found.")
                 return False
         else:
+            # Add a more informative error message
+            logging.info(f"No exit in direction {direction} from {current_loc.name}")
             print("You can't go that way.")
             return False
 

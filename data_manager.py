@@ -188,6 +188,7 @@ def validate_config(config_name, data):
         logging.warning(f"No validation schema for config: {config_name}")
         return True  # No schema means no validation
 
+# Add debug log to check location data
 def load_game_data():
     """Load all game data from config files"""
     ensure_config_directory()
@@ -334,6 +335,11 @@ def load_game_data():
             }
         }
     }
+    
+    # Log the location structure for debugging
+    logging.debug(f"Loaded locations with IDs: {list(default_locations['locations'].keys())}")
+    for loc_id, loc_data in default_locations['locations'].items():
+        logging.debug(f"Location {loc_id} has exits: {loc_data['exits']}")
     
     # Create default config files if they don't exist
     create_default_config("daemons", default_daemons)

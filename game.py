@@ -6,6 +6,7 @@ from pathlib import Path
 import pygame # Import Pygame
 import time # For potential delays
 import json # For JSON file handling
+import math # For animations
 
 # Local imports - alphabetical order
 from daemon import Daemon, Program, TYPE_CHART, STATUS_EFFECTS
@@ -23,7 +24,13 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
-GRAY = (128, 128, 128)  # Added for menu highlighting
+GRAY = (128, 128, 128)
+# Add new colors for menu improvements
+DARK_BLUE = (20, 30, 60)
+LIGHT_BLUE = (60, 130, 240)
+CYAN = (0, 200, 255)
+PURPLE = (120, 40, 140)
+DARK_PURPLE = (50, 0, 80)
 
 # Main menu options
 MENU_OPTIONS = ["New Game", "Load Game", "Options", "Quit"]
@@ -34,6 +41,33 @@ LOADED_PROGRAMS = {}  # Will store program definitions
 DAEMON_BASE_STATS = {}  # Alias for LOADED_DAEMONS for compatibility with existing code
 PROGRAMS = {}  # Alias for LOADED_PROGRAMS for compatibility
 world_map = {}  # Will store Location objects, keyed by ID
+
+# Game log to save
+GAME_LOG = []
+
+def add_to_game_log(message):
+    """Add a message to the game log for later saving"""
+    GAME_LOG.append(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {message}")
+    logging.info(message)
+
+def save_game_log():
+    """Save the game log to a file in the logs directory"""
+    log_dir = 'logs'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    game_log_file = os.path.join(log_dir, f'game_session_{timestamp}.log')
+    
+    try:
+        with open(game_log_file, 'w') as f:
+            f.write("\n".join(GAME_LOG))
+        logging.info(f"Game log saved to {game_log_file}")
+        print(f"Game log saved to {game_log_file}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to save game log: {e}")
+        return False
 
 def load_game_data(file_path):
     """Load game data from specified JSON file"""
@@ -132,7 +166,7 @@ combat_log = []
 
 def add_combat_log(message):
     """Adds a message to the combat log."""
-    logging.info(f"Combat Log: {message}") # Also log it
+    add_to_game_log(f"Combat Log: {message}") # Also log it
     combat_log.append(message)
     # Optional: Limit log size
     MAX_LOG_SIZE = 20 # Limit log to prevent excessive memory use
@@ -305,25 +339,122 @@ def draw_combat(screen, font, player, player_daemon, enemy_daemon):
          draw_text(screen, message, font, WHITE, log_x + 5, log_y + 5 + i * font.get_linesize())
 
 def draw_main_menu(screen, font, selected_index):
-    """Draws the main menu UI."""
-    screen.fill(BLACK)
+    """Draws the main menu UI with visual improvements."""
+    # Create a gradient background
+    gradient_rect = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    for y in range(SCREEN_HEIGHT):
+        # Calculate gradient color from dark purple at top to dark blue at bottom
+        r = int(DARK_PURPLE[0] + (DARK_BLUE[0] - DARK_PURPLE[0]) * y / SCREEN_HEIGHT)
+        g = int(DARK_PURPLE[1] + (DARK_BLUE[1] - DARK_PURPLE[1]) * y / SCREEN_HEIGHT)
+        b = int(DARK_PURPLE[2] + (DARK_BLUE[2] - DARK_PURPLE[2]) * y / SCREEN_HEIGHT)
+        pygame.draw.line(gradient_rect, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+    screen.blit(gradient_rect, (0, 0))
     
-    # Draw title
-    title_font = pygame.font.Font(None, 72)
-    draw_text(screen, "CNRD", title_font, WHITE, SCREEN_WIDTH // 2 - 80, 50)
-    draw_text(screen, "Cyber Network Runner Daemon", font, BLUE, SCREEN_WIDTH // 2 - 180, 120)
+    # Add subtle grid pattern for cyber effect
+    for x in range(0, SCREEN_WIDTH, 20):
+        pygame.draw.line(screen, (50, 100, 150, 50), (x, 0), (x, SCREEN_HEIGHT), 1)
+    for y in range(0, SCREEN_HEIGHT, 20):
+        pygame.draw.line(screen, (50, 100, 150, 50), (0, y), (SCREEN_WIDTH, y), 1)
     
-    # Draw menu options
+    # Get current time for animations
+    current_time = pygame.time.get_ticks()
+    pulse = (math.sin(current_time / 500) + 1) / 2  # Value between 0 and 1
+    
+    # Draw title with glow effect
+    title_font = pygame.font.Font(None, 82)
+    glow_size = int(4 + pulse * 3)  # Pulsing glow size
+    glow_color = (CYAN[0], CYAN[1], CYAN[2], int(100 + 155 * pulse))
+    
+    title_text = "CNRD"
+    title_y = 60
+    
+    # Draw the glowing version slightly larger
+    title_glow = title_font.render(title_text, True, glow_color)
+    title_glow_rect = title_glow.get_rect(center=(SCREEN_WIDTH//2, title_y))
+    screen.blit(title_glow, (title_glow_rect.x - glow_size//2, title_glow_rect.y - glow_size//2))
+    
+    # Draw the solid title
+    title = title_font.render(title_text, True, WHITE)
+    title_rect = title.get_rect(center=(SCREEN_WIDTH//2, title_y))
+    screen.blit(title, title_rect)
+    
+    # Draw subtitle
+    subtitle_font = pygame.font.Font(None, 36)
+    subtitle = subtitle_font.render("Cyber Network Runner Daemon", True, LIGHT_BLUE)
+    subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH//2, title_y + 60))
+    screen.blit(subtitle, subtitle_rect)
+    
+    # Draw decorative horizontal lines
+    line_y = title_y + 90
+    line_width = 300
+    line_height = 2
+    pygame.draw.rect(screen, CYAN, (SCREEN_WIDTH//2 - line_width//2, line_y, line_width, line_height))
+    pygame.draw.rect(screen, CYAN, (SCREEN_WIDTH//2 - line_width//4, line_y + 6, line_width//2, line_height))
+    
+    # Draw menu options with improved visual feedback
+    menu_y_start = 220
+    menu_spacing = 70
     menu_font = pygame.font.Font(None, 48)
-    for i, option in enumerate(MENU_OPTIONS):
-        # Highlight selected option
-        color = YELLOW if i == selected_index else WHITE
-        draw_text(screen, option, menu_font, color, SCREEN_WIDTH // 2 - 100, 200 + i * 60)
     
-    # Draw footer/instructions
+    for i, option in enumerate(MENU_OPTIONS):
+        # Determine position
+        y_pos = menu_y_start + i * menu_spacing
+        x_center = SCREEN_WIDTH // 2
+        
+        # Different styling for selected vs unselected
+        if i == selected_index:
+            # Draw selection box with pulsing effect
+            box_width = 280
+            box_height = 50
+            box_rect = pygame.Rect(x_center - box_width//2, y_pos - 10, box_width, box_height)
+            
+            # Pulsing border
+            border_color = list(CYAN)
+            border_color[3] = int(155 + 100 * pulse)  # Pulsing alpha
+            pygame.draw.rect(screen, border_color, box_rect, 2)
+            
+            # Selection indicator triangles
+            tri_size = 10
+            tri_x_offset = 140 + int(pulse * 5)  # Pulsing position
+            
+            # Left triangle
+            pygame.draw.polygon(screen, CYAN, [
+                (x_center - tri_x_offset, y_pos + 15),
+                (x_center - tri_x_offset - tri_size, y_pos + 15 - tri_size),
+                (x_center - tri_x_offset - tri_size, y_pos + 15 + tri_size)
+            ])
+            
+            # Right triangle
+            pygame.draw.polygon(screen, CYAN, [
+                (x_center + tri_x_offset, y_pos + 15),
+                (x_center + tri_x_offset + tri_size, y_pos + 15 - tri_size),
+                (x_center + tri_x_offset + tri_size, y_pos + 15 + tri_size)
+            ])
+            
+            # Selected text
+            option_color = YELLOW
+            option_text = menu_font.render(option, True, option_color)
+        else:
+            # Regular text
+            option_color = WHITE
+            option_text = menu_font.render(option, True, option_color)
+        
+        # Center the text
+        text_rect = option_text.get_rect(center=(x_center, y_pos + 15))
+        screen.blit(option_text, text_rect)
+    
+    # Draw version info and instructions
     footer_font = pygame.font.Font(None, 24)
-    draw_text(screen, "Use Arrow Keys to navigate, Enter to select", footer_font, GRAY, 
-              SCREEN_WIDTH // 2 - 180, SCREEN_HEIGHT - 50)
+    version_text = "v0.1 Alpha"
+    version_render = footer_font.render(version_text, True, GRAY)
+    version_rect = version_render.get_rect(bottomright=(SCREEN_WIDTH - 20, SCREEN_HEIGHT - 20))
+    screen.blit(version_render, version_rect)
+    
+    # Draw instructions
+    instr_text = "Use ↑↓ to navigate, Enter to select, Backspace to exit"
+    instr_render = footer_font.render(instr_text, True, GRAY)
+    instr_rect = instr_render.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 20))
+    screen.blit(instr_render, instr_rect)
 
 def create_daemon(daemon_id, level=1):
     """Create a new daemon object from the base stats based on its ID and level."""
@@ -685,13 +816,13 @@ def main():
 
     logging.basicConfig(
         filename=log_file,
-        level=logging.INFO,
+        level=logging.DEBUG,  # Change from INFO to DEBUG
         format='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)  # Change from INFO to DEBUG
     logging.getLogger().addHandler(console_handler)
 
     logging.info("Game starting up")
@@ -778,7 +909,19 @@ def main():
             if event.type == pygame.QUIT:
                 playing = False
             elif event.type == pygame.KEYDOWN:
-                if game_state == "main_menu":
+                # Global key handlers that work in any game state
+                if event.key == pygame.K_BACKSPACE:
+                    if game_state != "main_menu":
+                        logging.info("Returning to main menu via backspace key")
+                        add_to_game_log("Player returned to main menu")
+                        game_state = "main_menu"
+                        menu_selected_index = 0  # Reset menu selection
+                    else:
+                        # If already in main menu, backspace acts as a quit shortcut
+                        playing = False
+                
+                # Game state specific key handlers
+                elif game_state == "main_menu":
                     if event.key == pygame.K_UP:
                         menu_selected_index = (menu_selected_index - 1) % len(MENU_OPTIONS)
                     elif event.key == pygame.K_DOWN:
@@ -796,7 +939,11 @@ def main():
                     elif event.key == pygame.K_DOWN: direction = "south"
                     elif event.key == pygame.K_LEFT: direction = "west"
                     elif event.key == pygame.K_RIGHT: direction = "east"
-                    # TODO: Add keys for Scan, Train, Status, Daemons, Save, Quit
+                    elif event.key == pygame.K_q:  # Add quit option in-game
+                        logging.info("Player chose to quit the game")
+                        add_to_game_log("Player quit the game")
+                        playing = False
+                    # TODO: Add keys for Scan, Train, Status, Daemons, Save
 
                     if direction:
                         current_loc_id = player.location
@@ -996,7 +1143,7 @@ def main():
 
     # --- Game Exit ---
     logging.info("Game shutting down")
-    # TODO: Add save prompt before quitting
+    save_game_log()  # Save game log before quitting
     pygame.quit()
     sys.exit()
 

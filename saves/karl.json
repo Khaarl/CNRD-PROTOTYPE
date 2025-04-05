@@ -1,1 +1,38 @@
-{"name": "karl", "location": "home", "daemons": [{"name": "virulet", "daemon_type": "VIRUS", "level": 5, "base_hp": 20, "base_attack": 12, "base_defense": 8, "base_speed": 10, "base_special": 9, "hp": 28, "max_hp": 28, "attack": 16, "defense": 11, "speed": 14, "special": 12, "xp": 0, "xp_needed": 300, "programs": [{"id": "DATA_SIPHON", "name": "Data Siphon", "power": 40, "accuracy": 95, "type": "VIRUS", "effect": "damage", "description": "Siphons data from the target causing damage"}, {"id": "ENCRYPT_SHIELD", "name": "Encrypt Shield", "power": 0, "accuracy": 100, "type": "CRYPTO", "effect": "defend", "description": "Creates an encrypted shield to boost defense"}]}, {"name": "virulet", "daemon_type": "VIRUS", "level": 7, "base_hp": 20, "base_attack": 12, "base_defense": 8, "base_speed": 10, "base_special": 9, "hp": 32, "max_hp": 32, "attack": 19, "defense": 12, "speed": 16, "special": 14, "xp": 0, "xp_needed": 400, "programs": [{"id": "DATA_SIPHON", "name": "Data Siphon", "power": 40, "accuracy": 95, "type": "VIRUS", "effect": "damage", "description": "Siphons data from the target causing damage"}, {"id": "ENCRYPT_SHIELD", "name": "Encrypt Shield", "power": 0, "accuracy": 100, "type": "CRYPTO", "effect": "defend", "description": "Creates an encrypted shield to boost defense"}]}]}
+{
+  "name": "karl",
+  "location": "home",
+  "daemons": [
+    {
+      "name": "Virulet",
+      "level": 5,
+      "types": ["VIRUS"],
+      "hp": 22,
+      "max_hp": 22,
+      "attack": 15,
+      "defense": 12,
+      "speed": 15,
+      "xp": 0,
+      "xp_next_level": 125,
+      "programs": [
+        {
+          "id": "data_corruption",
+          "name": "Data Corruption",
+          "power": 40,
+          "accuracy": 95,
+          "type": "VIRUS",
+          "effect": "damage",
+          "description": "Corrupts the target's data structures"
+        },
+        {
+          "id": "memory_leak",
+          "name": "Memory Leak",
+          "power": 30,
+          "accuracy": 100,
+          "type": "VIRUS",
+          "effect": "status:CORRUPTED",
+          "description": "Creates a memory leak in the target's system"
+        }
+      ]
+    }
+  ]
+}

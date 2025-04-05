@@ -20,6 +20,28 @@ CNRD (Cyber Network Runner Daemon) is a text-based RPG with a cyberpunk theme, f
 - Added daemon creation and management
 - Created location-based navigation system
 
+### 2023-07-15: Main Menu Visual Improvements and Movement Bug Fix
+
+#### Bug Fixes
+- Fixed issue with player movement not working when starting a new game
+  - Problem was incorrect location ID in save file (using "Home Terminal" instead of "home")
+  - Added debug logging to player.py to better diagnose movement issues
+  - Updated save file to use the correct location ID format
+
+#### Visual Improvements
+- Redesigned the main menu with cyberpunk aesthetics:
+  - Added gradient background from dark purple to dark blue
+  - Implemented subtle grid pattern overlay for cyber effect
+  - Created pulsing glow effect on the title text
+  - Added decorative horizontal lines and improved typography
+  - Enhanced menu selection with animated triangular indicators and highlight box
+  - Added version info and navigation instructions
+
+#### New Features
+- Added backspace key to return to main menu from any game state
+- Implemented in-game quit option (press 'Q' while roaming)
+- Added game log system that saves gameplay session to the logs folder when quitting
+
 ## Next Steps
 - Implement save/load functionality through the main menu
 - Create options menu with adjustable settings
