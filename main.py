@@ -1,150 +1,261 @@
 import os
 import sys
-import json
-import time
-import random
 import logging
+import json
 from pathlib import Path
 
-import player
-from daemon import Daemon, Program
-from location import Location
+# Import game modules
+from player import Player
+from world import World
 from combat import Combat
+from main_menu import MainMenu
+from daemon import Daemon
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('game.log'),
-        logging.StreamHandler()
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    filename='game.log'
 )
 
 class Game:
-    """Main game class that handles the game loop and state."""
-    
     def __init__(self):
-        """Initialize the game."""
-        logging.info("Game starting up")
-        print("Game starting up")
-        
-        # Load game data
-        self.daemons_data = self._load_json_data('config/daemons.json')
-        self.programs_data = self._load_json_data('config/programs.json')
-        
-        # Load locations
-        self.locations_data = self._load_json_data('config/locations.json')
-        self.world_map = self._create_world_map()
-        
-        logging.info("Game data loaded successfully")
-        print("Game data loaded successfully")
-        
-        # Initialize player (to be set during game)
+        self.world = World()
         self.player = None
         self.running = True
+        self.save_dir = Path("saves")
+        self.save_dir.mkdir(exist_ok=True)
         
-        logging.info("Game initialized with data from config files and Location objects created.")
-        print("Game initialized with data from config files and Location objects created.")
-    
-    def _load_json_data(self, filepath):
-        """Load JSON data from a file."""
-        try:
-            with open(filepath, 'r') as f:
-                data = json.load(f)
-            logging.info(f"Successfully loaded data from {filepath}")
-            print(f"Successfully loaded data from {filepath}")
-            return data
-        except FileNotFoundError:
-            logging.error(f"Could not find file {filepath}")
-            print(f"Could not find file {filepath}")
-            return {}
-        except json.JSONDecodeError:
-            logging.error(f"Error parsing JSON in {filepath}")
-            print(f"Error parsing JSON in {filepath}")
-            return {}
-    
-    def _create_world_map(self):
-        """Create the world map from location data."""
-        world_map = {}
-        for location_id, location_data in self.locations_data.items():
-            location = Location(
-                id=location_id,
-                name=location_data["name"],
-                description=location_data["description"],
-                exits=location_data["exits"],
-                encounter_rate=location_data.get("encounter_rate", 0.3)
-            )
-            world_map[location_id] = location
-        return world_map
-    
-    def start_game(self):
-        """Start the game loop."""
-        self._display_title_screen()
+    def initialize(self):
+        # Initialize the game world
+        self.world.load_locations()
         
-        username = input("\nEnter your username: ")
-        self.player = self._load_or_create_player(username)
+    def run(self):
+        """Main game loop"""
+        self.initialize()
         
-        self._game_loop()
-    
-    def _load_or_create_player(self, username):
-        """Load a player from a save file or create a new one."""
-        save_path = Path(f"saves/{username}.json")
+        # Show main menu and handle selection
+        menu = MainMenu(self)
+        menu_result = menu.run()
         
-        if save_path.exists():
+        # Process menu selection
+        if menu_result["action"] == "new_game":
+            self.start_new_game(menu_result["player_name"])
+        elif menu_result["action"] == "load_game":
+            self.load_game(menu_result["save_file"])
+        elif menu_result["action"] == "quick_fight":
+            self.start_quick_fight()
+            # Return to main menu after quick fight
+            self.run()
+            return
+            
+        # Main game loop
+        while self.running:
+            self.display_current_location()
+            command = input("\nWhat will you do? > ").strip().lower()
+            self.process_command(command)
+            
+    def start_new_game(self, player_name):
+        """Create a new game with the specified player name"""
+        self.player = Player(player_name, "home")
+        
+        # Let player select a starter daemon
+        print(f"\nWelcome, {player_name}! Choose your starter daemon:")
+        print("1: Virulet (Virus type)")
+        print("2: Pyrowall (Firewall type)")
+        print("3: Aquabyte (Crypto type)")
+        
+        valid_choice = False
+        while not valid_choice:
             try:
-                with open(save_path, 'r') as f:
-                    player_data = json.load(f)
-                loaded_player = player.Player.from_dict(player_data)
-                print(f"Welcome back, {username}!")
-                return loaded_player
-            except Exception as e:
-                logging.error(f"Error loading save file: {e}")
-                print("Error loading save file. Creating new profile...")
-                return self._create_new_player(username)
-        else:
-            logging.warning(f"Save file not found: {save_path}")
-            print(f"Save file not found: {save_path}")
-            return self._create_new_player(username)
-    
-    def _create_new_player(self, username):
-        """Create a new player."""
-        print(f"\nCreating new profile for {username}...")
-        
-        # Let player select starter daemon
-        print("\nChoose your starting daemon:")
-        print("1. Virulet (Malware type - balanced)")
-        print("2. Pyrowall (Shell type - high defense)")
-        print("3. Aquabyte (Encryption type - balanced)")
-        
-        while True:
-            try:
-                choice = int(input("\nEnter your choice (1-3): "))
-                if choice < 1 or choice > 3:
-                    print("Invalid choice. Please enter a number between 1 and 3.")
-                    continue
-                break
+                choice = int(input("Enter choice (1-3): "))
+                if choice == 1:
+                    daemon = self.player.create_starter_daemon("virulet")
+                    valid_choice = True
+                elif choice == 2:
+                    daemon = self.player.create_starter_daemon("pyrowall")
+                    valid_choice = True
+                elif choice == 3:
+                    daemon = self.player.create_starter_daemon("aquabyte")
+                    valid_choice = True
+                else:
+                    print("Invalid choice. Please enter 1, 2, or 3.")
             except ValueError:
-                print("Invalid input. Please enter a number.")
+                print("Please enter a number (1-3).")
+                
+        self.player.add_daemon(daemon)
+        print(f"You've chosen {daemon.name} as your starter daemon!")
+        print("Your journey into the digital wilderness begins now...")
+        input("Press Enter to continue...")
         
-        # Create player and add starter daemon
-        new_player = player.Player(username)
+        # Save the initial game state
+        self.save_game()
         
-        # Map choice to daemon name
-        daemon_choices = ["virulet", "pyrowall", "aquabyte"]
-        daemon_name = daemon_choices[choice - 1]
+    def load_game(self, save_file_path):
+        """Load a game from the specified save file"""
+        try:
+            with open(save_file_path, 'r') as f:
+                save_data = json.load(f)
+            
+            # Create player from save data
+            self.player = Player.from_dict(save_data, self.world.locations)
+            print(f"Welcome back, {self.player.name}!")
+            input("Press Enter to continue...")
+        except Exception as e:
+            logging.error(f"Error loading game: {e}", exc_info=True)
+            print(f"Error loading game: {e}")
+            input("Press Enter to return to main menu...")
+            self.run()
+            
+    def start_quick_fight(self):
+        """Start a test battle for quick gameplay"""
+        if not self.player:
+            # Create a temporary player for quick fight
+            self.player = Player("TestPlayer", "home")
+            test_daemon = self.player.create_starter_daemon("virulet")
+            self.player.add_daemon(test_daemon)
+            
+        # Create an opponent with a random daemon
+        from npc import NPC
+        test_opponent = NPC("Test Opponent", "wild_daemon")
+        opponent_daemon = self.player.create_starter_daemon("pyrowall")
+        test_opponent.daemons = [opponent_daemon]
         
-        # Create starter daemon with programs
-        starter_daemon = new_player.create_starter_daemon(daemon_name)
-        new_player.add_daemon(starter_daemon)
+        print("\nStarting Quick Fight!")
+        print(f"Your {self.player.daemons[0].name} vs. Opponent's {opponent_daemon.name}")
+        input("Press Enter to start the battle...")
         
-        print(f"\nWelcome, {username}! You've chosen {daemon_name} as your starting daemon.")
-        return new_player
-    
-    def _display_title_screen(self):
-        """Display the game's title screen."""
-        print("\n" + "=" * 60)
-        print("Welcome to CNRD - Cyber Network Roguelike with Daemons")
-        print("=" * 60)
+        # Start combat
+        combat = Combat(self.player, test_opponent)
+        result = combat.start_battle()
+        
+        print("\nQuick Fight Complete!")
+        if result["winner"] == "player":
+            print("You won!")
+        else:
+            print("You lost!")
+        
+        # Heal daemons after battle
+        self.player.heal_all_daemons()
+        input("Press Enter to return to main menu...")
+        
+    def display_current_location(self):
+        """Display information about the player's current location"""
+        if not self.player:
+            return
+            
+        current_loc = self.player.get_current_location(self.world.locations)
+        if not current_loc:
+            print("Error: You're in an invalid location.")
+            return
+            
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\n" + "=" * 50)
+        print(f"Location: {current_loc.name}")
+        print("=" * 50)
+        print(current_loc.description)
+        
+        # Show available exits
+        print("\nAvailable exits:")
+        for direction, location_id in current_loc.exits.items():
+            exit_loc = self.world.locations.get(location_id)
+            if exit_loc:
+                print(f"  {direction.capitalize()}: {exit_loc.name}")
+        
+        # Show player status
+        self.player.display_status()
+        
+    def process_command(self, command):
+        """Process user commands"""
+        if command == "quit" or command == "exit":
+            self.save_game()
+            print("Thanks for playing!")
+            self.running = False
+            
+        elif command.startswith("go "):
+            direction = command[3:].strip()
+            self.player.move(direction, self.world.locations)
+            self.check_for_encounters()
+            
+        elif command in ["north", "south", "east", "west", "up", "down"]:
+            self.player.move(command, self.world.locations)
+            self.check_for_encounters()
+            
+        elif command == "look":
+            # Just redisplay the current location
+            pass
+            
+        elif command == "status":
+            self.player.display_status(self.world.locations)
+            input("\nPress Enter to continue...")
+            
+        elif command == "daemons":
+            self.player.display_daemons_detailed()
+            input("\nPress Enter to continue...")
+            
+        elif command == "help":
+            self.display_help()
+            
+        elif command == "save":
+            self.save_game()
+            print("Game saved successfully!")
+            input("Press Enter to continue...")
+            
+        elif command == "menu":
+            self.return_to_menu()
+            
+        else:
+            print("I don't understand that command. Type 'help' for a list of commands.")
+            input("Press Enter to continue...")
+            
+    def check_for_encounters(self):
+        """Check for random encounters when moving"""
+        # Placeholder for encounter system
+        pass
+        
+    def save_game(self):
+        """Save the current game state"""
+        if not self.player:
+            return
+            
+        save_data = self.player.to_dict()
+        save_path = self.save_dir / f"{self.player.name.lower()}.json"
+        
+        try:
+            with open(save_path, 'w') as f:
+                json.dump(save_data, f)
+            logging.info(f"Game saved to {save_path}")
+        except Exception as e:
+            logging.error(f"Error saving game: {e}", exc_info=True)
+            print(f"Error saving game: {e}")
+            
+    def display_help(self):
+        """Display available commands"""
+        print("\n=== Available Commands ===")
+        print("go <direction> - Move in a direction (north, south, east, west, up, down)")
+        print("<direction> - Shortcut for go <direction>")
+        print("look - Look around your current location")
+        print("status - Display player status")
+        print("daemons - Display detailed daemon information")
+        print("save - Save your game")
+        print("menu - Return to main menu")
+        print("help - Display this help message")
+        print("quit/exit - Save and quit the game")
+        print("========================")
+        input("\nPress Enter to continue...")
+        
+    def return_to_menu(self):
+        """Save and return to main menu"""
+        self.save_game()
+        self.run()  # Restart from menu
 
-    # ...existing code...
+# Start game if run directly
+if __name__ == "__main__":
+    game = Game()
+    try:
+        game.run()
+    except Exception as e:
+        logging.critical(f"Unhandled exception: {e}", exc_info=True)
+        print(f"Unhandled exception: {e}")
+        input("Press Enter to exit...")
+        sys.exit(1)

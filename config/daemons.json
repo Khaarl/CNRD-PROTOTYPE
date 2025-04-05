@@ -2,16 +2,13 @@
   "virulet": {
     "name": "Virulet",
     "types": ["VIRUS"],
-    "hp": 40,
-    "attack": 55,
-    "defense": 40,
-    "speed": 60,
-    "special": 50,
+    "hp": 20,
+    "attack": 12,
+    "defense": 8,
+    "speed": 10,
+    "special": 9,
     "capture_rate": 45,
-    "learnset": {
-      "1": ["DATA_SIPHON"],
-      "5": ["ENCRYPT_SHIELD"]
-    }
+    "programs": ["DATA_SIPHON", "ENCRYPT_SHIELD"]
   },
   "pyrowall": {
     "name": "Pyrowall",
@@ -82,6 +79,66 @@
       "1": ["GHOST_TOUCH"],
       "4": ["SHELL_SMASH"],
       "7": ["DATA_SIPHON"]
+    }
+  },
+  "security_byte": {
+    "name": "Security Byte",
+    "types": ["FIREWALL", "TROJAN"],
+    "hp": 25,
+    "attack": 14,
+    "defense": 18,
+    "speed": 12,
+    "special": 11,
+    "capture_rate": 40,
+    "learnset": {
+      "1": ["FIREWALL_BASH"],
+      "5": ["TROJAN_INJECT"],
+      "9": ["ENCRYPT_SHIELD"]
+    }
+  },
+  "prototype_daemon": {
+    "name": "Prototype Daemon",
+    "types": ["VIRUS", "SHELL"],
+    "hp": 30,
+    "attack": 20,
+    "defense": 15,
+    "speed": 18,
+    "special": 22,
+    "capture_rate": 20,
+    "learnset": {
+      "1": ["DATA_SIPHON"],
+      "6": ["SHELL_SMASH"],
+      "12": ["VIRUS_IMPLANT"]
+    }
+  },
+  "glitch_anomaly": {
+    "name": "Glitch Anomaly",
+    "types": ["GHOST", "VIRUS"],
+    "hp": 28,
+    "attack": 17,
+    "defense": 12,
+    "speed": 24,
+    "special": 25,
+    "capture_rate": 25,
+    "learnset": {
+      "1": ["GHOST_TOUCH"],
+      "7": ["VIRUS_IMPLANT"],
+      "14": ["EXPLOIT_CRACK"]
+    }
+  },
+  "corporate_sprite": {
+    "name": "Corporate Sprite",
+    "types": ["FIREWALL", "GHOST"],
+    "hp": 24,
+    "attack": 15,
+    "defense": 19,
+    "speed": 16,
+    "special": 14,
+    "capture_rate": 35,
+    "learnset": {
+      "1": ["FIREWALL_BASH"],
+      "6": ["GHOST_TOUCH"],
+      "10": ["ENCRYPT_SHIELD"]
     }
   }
 }

@@ -299,6 +299,15 @@
         {"id": "system_administrator", "min_lvl": 30, "max_lvl": 35},
         {"id": "neuromancer_fragment", "min_lvl": 40, "max_lvl": 50}
       ]
+    },
+    "home": {
+      "name": "Home Terminal",
+      "description": "Your personal terminal setup with multiple screens displaying code fragments and daemon statistics. The soft glow of the monitors provides the only light in this cozy space.",
+      "encounter_rate": 0.0,
+      "scan_encounter_rate": 0.0,
+      "exits": {
+        "outside": "market_square"
+      }
     }
   }
 }

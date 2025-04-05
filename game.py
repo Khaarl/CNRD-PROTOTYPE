@@ -5,10 +5,11 @@ import logging
 from pathlib import Path
 import pygame # Import Pygame
 import time # For potential delays
+import json # For JSON file handling
 
 # Local imports - alphabetical order
 from daemon import Daemon, Program, TYPE_CHART, STATUS_EFFECTS
-from data_manager import load_game_data, load_game, save_game
+from data_manager import load_game, save_game
 from location import Location
 from player import Player
 
@@ -22,59 +23,101 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
+GRAY = (128, 128, 128)  # Added for menu highlighting
+
+# Main menu options
+MENU_OPTIONS = ["New Game", "Load Game", "Options", "Quit"]
 
 # Global game data (populated by initialize_game)
-DAEMON_BASE_STATS = {}
-PROGRAMS = {}
-world_map = {} # Will store Location objects, keyed by ID
+LOADED_DAEMONS = {}  # Will store daemon definitions
+LOADED_PROGRAMS = {}  # Will store program definitions
+DAEMON_BASE_STATS = {}  # Alias for LOADED_DAEMONS for compatibility with existing code
+PROGRAMS = {}  # Alias for LOADED_PROGRAMS for compatibility
+world_map = {}  # Will store Location objects, keyed by ID
+
+def load_game_data(file_path):
+    """Load game data from specified JSON file"""
+    try:
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading game data from {file_path}: {str(e)}")
+        raise
+
+def load_dev_instruction(filename):
+    """Load development instruction from the devinstruction folder."""
+    try:
+        instruction_path = os.path.join("devinstruction", filename)
+        if os.path.exists(instruction_path):
+            with open(instruction_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        else:
+            logging.warning(f"Dev instruction file {filename} not found")
+            return None
+    except Exception as e:
+        logging.error(f"Error loading dev instruction {filename}: {e}")
+        return None
+
+def process_dev_instructions():
+    """Process all development instructions to set up game configuration."""
+    # Load main instruction file first
+    main_instructions = load_dev_instruction("main_instructions.txt")
+    if main_instructions:
+        logging.info("Loaded main development instructions")
+    
+    # Load menu instructions
+    menu_instructions = load_dev_instruction("menu_instructions.txt")
+    if menu_instructions:
+        logging.info("Loaded menu development instructions")
+        # Parse menu structure if needed
+        # This could modify MENU_OPTIONS or add submenu configurations
+    
+    # Return whether we successfully loaded instructions
+    return main_instructions is not None
 
 def initialize_game():
-    """Initialize the game data and objects, populating global variables."""
-    # Load game data from config files
-    game_data = load_game_data()
-
-    # Create global variables with loaded data
-    global DAEMON_BASE_STATS, PROGRAMS, world_map # Ensure we modify the global world_map
-    DAEMON_BASE_STATS = game_data.get("daemons", {}) # Use .get for safety
-    PROGRAMS = game_data.get("programs", {})
-
-    # Load world map data first
-    world_data = game_data.get("locations", {})
-    raw_locations = world_data.get("locations", {}) # This is the dict from JSON
-
-    # Create Location objects from the raw data
-    world_map = {}
-    start_location_id = world_data.get("start_location") # Get start ID early for logging if needed
-
-    for loc_id, loc_data in raw_locations.items():
-        # Check if loc_data is a dictionary before accessing keys
-        if isinstance(loc_data, dict):
-            world_map[loc_id] = Location(
-                loc_id=loc_id,
-                name=loc_data.get("name", f"Unknown Location {loc_id}"), # Use .get with defaults
-                description=loc_data.get("description", ""),
-                exits=loc_data.get("exits", {}),
-                encounter_rate=loc_data.get("encounter_rate", 0.0),
-                wild_daemons=loc_data.get("wild_daemons", [])
-            )
-        else:
-            logging.error(f"Invalid data format for location ID '{loc_id}' in config. Expected a dictionary, got {type(loc_data)}")
-
-    logging.info("Game initialized with data from config files and Location objects created.")
-
-    if not start_location_id or start_location_id not in world_map:
-         logging.error(f"Start location ID '{start_location_id}' missing or invalid in config. Defaulting.")
-         # Try to find *any* valid location ID as a fallback
-         valid_ids = list(world_map.keys())
-         start_location_id = valid_ids[0] if valid_ids else None
-         if not start_location_id:
-              logging.critical("No valid locations found in config! Cannot start game.")
-              print("CRITICAL ERROR: No valid locations defined. Check config/locations.json")
-              sys.exit(1)
-         logging.warning(f"Defaulting start location to '{start_location_id}'.")
-
-
-    return start_location_id # Just return the start ID
+    """Initialize game data from config files."""
+    try:
+        global LOADED_DAEMONS, LOADED_PROGRAMS, world_map, DAEMON_BASE_STATS, PROGRAMS
+        # Load daemon data
+        daemon_data = load_game_data("config/daemons.json")
+        LOADED_DAEMONS = daemon_data
+        DAEMON_BASE_STATS = daemon_data  # Set the alias for compatibility
+        
+        # Load program data
+        program_data = load_game_data("config/programs.json")
+        LOADED_PROGRAMS = program_data
+        PROGRAMS = program_data  # Set the alias for compatibility
+        
+        # Load location data and construct Location objects
+        locations_data = load_game_data("config/locations.json")
+        world_map = {}
+        
+        # Get the starting location ID (with fallback)
+        start_location_id = locations_data.get("start_location", "market_square")
+        # For backward compatibility - some config files use "start_location" rather than "start_location_id"
+        if "start_location_id" in locations_data:
+            start_location_id = locations_data["start_location_id"]
+            
+        # Create Location objects from the data
+        locations = locations_data.get("locations", {})
+        for loc_id, loc_data in locations.items():
+            name = loc_data.get("name", "Unknown Area")
+            desc = loc_data.get("description", "No description available.")
+            exits = loc_data.get("exits", {})
+            encounter_rate = loc_data.get("encounter_rate", 0.0)
+            scan_encounter_rate = loc_data.get("scan_encounter_rate", 0.0)
+            wild_daemons = loc_data.get("wild_daemons", [])
+            
+            world_map[loc_id] = Location(loc_id, name, desc, exits, 
+                                         encounter_rate=encounter_rate, 
+                                         scan_encounter_rate=scan_encounter_rate, 
+                                         wild_daemons=wild_daemons)
+        logging.info("Game initialized with data from config files and Location objects created.")
+        return start_location_id
+    except Exception as e:
+        logging.critical(f"Failed to initialize game data: {e}", exc_info=True)
+        raise
 
 # --- Helper Functions ---
 def draw_text(surface, text, font, color, x, y):
@@ -260,6 +303,27 @@ def draw_combat(screen, font, player, player_daemon, enemy_daemon):
     start_index = max(0, len(combat_log) - log_max_lines)
     for i, message in enumerate(combat_log[start_index:]):
          draw_text(screen, message, font, WHITE, log_x + 5, log_y + 5 + i * font.get_linesize())
+
+def draw_main_menu(screen, font, selected_index):
+    """Draws the main menu UI."""
+    screen.fill(BLACK)
+    
+    # Draw title
+    title_font = pygame.font.Font(None, 72)
+    draw_text(screen, "CNRD", title_font, WHITE, SCREEN_WIDTH // 2 - 80, 50)
+    draw_text(screen, "Cyber Network Runner Daemon", font, BLUE, SCREEN_WIDTH // 2 - 180, 120)
+    
+    # Draw menu options
+    menu_font = pygame.font.Font(None, 48)
+    for i, option in enumerate(MENU_OPTIONS):
+        # Highlight selected option
+        color = YELLOW if i == selected_index else WHITE
+        draw_text(screen, option, menu_font, color, SCREEN_WIDTH // 2 - 100, 200 + i * 60)
+    
+    # Draw footer/instructions
+    footer_font = pygame.font.Font(None, 24)
+    draw_text(screen, "Use Arrow Keys to navigate, Enter to select", footer_font, GRAY, 
+              SCREEN_WIDTH // 2 - 180, SCREEN_HEIGHT - 50)
 
 def create_daemon(daemon_id, level=1):
     """Create a new daemon object from the base stats based on its ID and level."""
@@ -592,8 +656,25 @@ def start_training_battle(player, difficulty="normal"):
     logging.warning("start_training_battle needs refactoring for Pygame UI")
     return False # Prevent use until refactored
 
+def handle_menu_selection(option, player):
+    """Processes the user's menu selection."""
+    if option == "New Game":
+        # Initialize a new game
+        return "roaming"
+    elif option == "Load Game":
+        # TODO: Implement proper load game functionality with selection UI
+        # For now, just return to roaming since player is already loaded at startup
+        return "roaming"
+    elif option == "Options":
+        # TODO: Implement options menu
+        return "main_menu"  # Stay in menu until options are implemented
+    elif option == "Quit":
+        return "quit"
+    
+    # Default fallback
+    return "main_menu"
 
-def main(): # Explicitly ensure zero indentation
+def main():
     # Configure logging
     # Use rotating file handler later if needed
     log_dir = 'logs'
@@ -632,6 +713,13 @@ def main(): # Explicitly ensure zero indentation
         pygame.quit()
         sys.exit(1)
 
+    # Process development instructions
+    try:
+        if not process_dev_instructions():
+            logging.warning("Development instructions not fully loaded or missing.")
+    except Exception as e:
+        logging.error(f"Error processing development instructions: {e}", exc_info=True)
+
     # --- Player Loading/Creation (Temporary - needs graphical interface) ---
     player_name = "karl" # Hardcode for now, or load default
     player = None
@@ -669,7 +757,7 @@ def main(): # Explicitly ensure zero indentation
 
     # Game state management
     global game_state, current_enemy_daemon, combat_sub_state # Make global for modification
-    game_state = "roaming" # Possible states: roaming, combat, menu, etc.
+    game_state = "main_menu"  # Start with main menu instead of directly going to roaming
     current_enemy_daemon = None # Holds the daemon for the current combat encounter
     combat_sub_state = "player_choose_action" # For combat flow
 
@@ -677,6 +765,9 @@ def main(): # Explicitly ensure zero indentation
     player_chosen_action = None
     player_selected_program = None
     # player_selected_switch_target = None # For later
+
+    # Main menu variables
+    menu_selected_index = 0
 
     # Game loop
     playing = True
@@ -687,7 +778,19 @@ def main(): # Explicitly ensure zero indentation
             if event.type == pygame.QUIT:
                 playing = False
             elif event.type == pygame.KEYDOWN:
-                if game_state == "roaming":
+                if game_state == "main_menu":
+                    if event.key == pygame.K_UP:
+                        menu_selected_index = (menu_selected_index - 1) % len(MENU_OPTIONS)
+                    elif event.key == pygame.K_DOWN:
+                        menu_selected_index = (menu_selected_index + 1) % len(MENU_OPTIONS)
+                    elif event.key == pygame.K_RETURN:
+                        selected_option = MENU_OPTIONS[menu_selected_index]
+                        next_state = handle_menu_selection(selected_option, player)
+                        if next_state == "quit":
+                            playing = False
+                        else:
+                            game_state = next_state
+                elif game_state == "roaming":
                     direction = None
                     if event.key == pygame.K_UP: direction = "north"
                     elif event.key == pygame.K_DOWN: direction = "south"
@@ -699,6 +802,7 @@ def main(): # Explicitly ensure zero indentation
                         current_loc_id = player.location
                         if current_loc_id in world_map:
                             location = world_map[current_loc_id]
+                            logging.info(f"Trying to move {direction} from {location.name}")
                             if direction in location.exits:
                                 destination_id = location.exits[direction]
                                 if destination_id in world_map:
@@ -731,8 +835,11 @@ def main(): # Explicitly ensure zero indentation
                                                 else:
                                                     logging.error(f"Failed to create wild daemon '{daemon_id}'")
                                 else:
-                                    # No valid direction pressed for movement
-                                    pass
+                                    logging.error(f"Destination '{destination_id}' not found in world map")
+                            else:
+                                logging.info(f"No exit in direction {direction} from {location.name}")
+                        else:
+                            logging.error(f"Current location ID '{current_loc_id}' not in world map")
                 elif game_state == "combat":
                     # Handle input based on combat sub-state (only when waiting for player input)
                     if combat_sub_state == "player_choose_action":
@@ -840,7 +947,9 @@ def main(): # Explicitly ensure zero indentation
         screen.fill(BLACK) # Clear screen each frame
 
         # Draw based on game state
-        if game_state == "roaming":
+        if game_state == "main_menu":
+            draw_main_menu(screen, font, menu_selected_index)
+        elif game_state == "roaming":
             current_loc_id = player.location
             if current_loc_id in world_map:
                 location = world_map[current_loc_id]

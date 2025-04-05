@@ -1,0 +1,9 @@
+2025-04-05 16:37:41 - INFO - Logging initialized
+2025-04-05 16:37:41 - INFO - Starting CNRD bootstrap process
+2025-04-05 16:37:41 - INFO - Game starting up
+2025-04-05 16:37:41 - INFO - Game initialized with data from config files and Location objects created.
+2025-04-05 16:37:41 - INFO - Game loaded successfully from saves\karl.json
+2025-04-05 16:37:41 - WARNING - Loaded daemon 'virulet' using legacy 'daemon_type'. Converted to types: ['VIRUS']
+2025-04-05 16:37:41 - WARNING - Loaded daemon 'virulet' using legacy 'daemon_type'. Converted to types: ['VIRUS']
+2025-04-05 16:37:41 - INFO - Loaded player: karl
+2025-04-05 16:37:57 - INFO - Game shutting down
