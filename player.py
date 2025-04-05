@@ -1,9 +1,14 @@
 import logging
+import json
+import os
+import random
 from pathlib import Path
+from daemon import Daemon, Program
 
 class Player:
-    """Represents the player character."""
-    def __init__(self, name, start_location_id, daemons=None):
+    """Player class representing the user in the CNRD game."""
+
+    def __init__(self, name, start_location_id="Home", daemons=None):
         """
         Initializes the Player.
         Args:
@@ -14,9 +19,134 @@ class Player:
         self.name = name
         self.location = start_location_id  # Store location ID directly
         self.daemons = daemons if daemons else []
+        self.inventory = {
+            "Daemon Capture Tool": 5,
+            "Health Kit": 3
+        }
+        self.money = 1000
+        self.reputation = {
+            "NetSec": 0,
+            "DarkNet": 0,
+            "CyberPunks": 0
+        }
+    
+    def create_starter_daemon(self, daemon_name):
+        """Create a starter daemon for the player."""
+        starter_daemons = {
+            "virulet": {
+                "name": "Virulet",
+                "level": 5,
+                "types": ["VIRUS"],
+                "base_stats": {
+                    "hp": 22,
+                    "attack": 15,
+                    "defense": 12,
+                    "speed": 15,
+                    "special": 12
+                },
+                "programs": [
+                    {
+                        "name": "Data Corruption",
+                        "power": 40,
+                        "accuracy": 95,
+                        "program_type": "VIRUS",
+                        "effect": "damage"
+                    },
+                    {
+                        "name": "Memory Leak",
+                        "power": 30,
+                        "accuracy": 100,
+                        "program_type": "VIRUS",
+                        "effect": "status:CORRUPTED"
+                    }
+                ]
+            },
+            "pyrowall": {
+                "name": "Pyrowall",
+                "level": 5,
+                "types": ["FIREWALL"],
+                "base_stats": {
+                    "hp": 25,
+                    "attack": 12,
+                    "defense": 18,
+                    "speed": 10,
+                    "special": 13
+                },
+                "programs": [
+                    {
+                        "name": "Packet Block",
+                        "power": 45,
+                        "accuracy": 90,
+                        "program_type": "FIREWALL",
+                        "effect": "damage"
+                    },
+                    {
+                        "name": "Port Shield",
+                        "power": 0,
+                        "accuracy": 100,
+                        "program_type": "FIREWALL",
+                        "effect": "defend:1.5"
+                    }
+                ]
+            },
+            "aquabyte": {
+                "name": "Aquabyte",
+                "level": 5,
+                "types": ["CRYPTO"],
+                "base_stats": {
+                    "hp": 20,
+                    "attack": 13,
+                    "defense": 13,
+                    "speed": 14,
+                    "special": 18
+                },
+                "programs": [
+                    {
+                        "name": "Hash Collision",
+                        "power": 40,
+                        "accuracy": 95,
+                        "program_type": "CRYPTO",
+                        "effect": "damage"
+                    },
+                    {
+                        "name": "Key Scramble",
+                        "power": 0,
+                        "accuracy": 90,
+                        "program_type": "CRYPTO",
+                        "effect": "status:LOCKED"
+                    }
+                ]
+            }
+        }
         
-        # No need to validate here as we're getting the location ID directly from locations.json
-        # This removes the validation that was causing the crash
+        if daemon_name.lower() not in starter_daemons:
+            logging.warning(f"Invalid starter daemon name: {daemon_name}")
+            return None
+        
+        starter_info = starter_daemons[daemon_name.lower()]
+        
+        # Create program objects
+        programs = []
+        for prog_data in starter_info["programs"]:
+            program = Program(
+                name=prog_data["name"],
+                power=prog_data["power"],
+                accuracy=prog_data["accuracy"],
+                program_type=prog_data["program_type"],
+                effect=prog_data["effect"]
+            )
+            programs.append(program)
+        
+        # Create and return the daemon
+        daemon = Daemon(
+            name=starter_info["name"],
+            level=starter_info["level"],
+            types=starter_info["types"],
+            base_stats=starter_info["base_stats"],
+            programs=programs
+        )
+        
+        return daemon
 
     def get_current_location(self, world_map):
         """Returns the Location object corresponding to the player's current location ID."""
@@ -105,12 +235,6 @@ class Player:
                 healthy.append(d)
         return healthy
 
-    # get_first_healthy_daemon is effectively replaced by get_active_daemon now
-    # def get_first_healthy_daemon(self):
-    #     """Returns the first available healthy Daemon or None."""
-    #     healthy_daemons = self.get_healthy_daemons()
-    #     return healthy_daemons[0] if healthy_daemons else None
-
     def display_status(self, world_map=None):
          """Prints the player's current status."""
          # world_map can be optional with a simple summary display if not provided
@@ -138,7 +262,6 @@ class Player:
                    active_marker = " (Active)" if daemon == active_daemon and not daemon.is_fainted() else ""
                    print(f"   {i+1}: {daemon.name} (Lv.{daemon.level}) - HP: {hp}/{max_hp} [{status}]{active_marker}")
 
-    # Renaming this to match the command used in game.py
     def display_daemons_detailed(self):
         """Uses the Daemon's display_summary for each owned Daemon."""
         if not self.daemons:
@@ -164,11 +287,6 @@ class Player:
         # Use .get for safer dictionary access
         name = data.get("name", "Unnamed Player")
         location = data.get("location", None) # Get location ID
-
-        # Validate location? For now, assume game.py handles invalid location after load
-        # if world_map and location not in world_map:
-        #     logging.warning(f"Loaded player location '{location}' is invalid. Resetting needed.")
-        #     # Handle reset logic here or in game.py
 
         player = cls(
             name,

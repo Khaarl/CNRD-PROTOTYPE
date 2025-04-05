@@ -37,12 +37,12 @@ def setup_logging():
 
 def ensure_directories_exist():
     """Ensure all required directories exist"""
-    directories = ["saves", "logs", "config"]
+    directories = ["saves", "logs", "config", "logs/crashes"]
     
     for directory in directories:
         dir_path = Path(directory)
         if not dir_path.exists():
-            dir_path.mkdir(exist_ok=True)
+            dir_path.mkdir(exist_ok=True, parents=True)
             logging.info(f"Created directory: {directory}")
 
 def run_game_with_error_handling():
@@ -50,23 +50,21 @@ def run_game_with_error_handling():
     try:
         game.main()
     except KeyboardInterrupt:
-        logging.info("Game terminated by user (KeyboardInterrupt)")
+        logging.info("Game interrupted by user (CTRL+C)")
+        print("\nGame terminated by user.")
     except Exception as e:
-        logging.critical(f"Unhandled exception: {str(e)}")
-        logging.critical(traceback.format_exc())
-        
-        # Create crash report
+        logging.critical(f"Unhandled exception: {e}", exc_info=True)
+        print("\n" + "!" * 60)
+        print("CRITICAL ERROR: The game has encountered an unhandled exception.")
+        print("Creating crash report and terminating...")
+        print("!" * 60)
         create_crash_report(e)
-        
-        print("\n" + "=" * 60)
-        print("The game has encountered an unexpected error and needs to close.")
-        print("A crash report has been created in the 'logs' directory.")
-        print("=" * 60)
+        sys.exit(1)
 
 def create_crash_report(exception):
     """Create a detailed crash report"""
     crash_dir = Path("logs/crashes")
-    crash_dir.mkdir(exist_ok=True)
+    crash_dir.mkdir(exist_ok=True, parents=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     crash_file = crash_dir / f"crash_{timestamp}.txt"
@@ -85,8 +83,44 @@ def create_crash_report(exception):
         
         f.write("Traceback:\n")
         f.write(traceback.format_exc())
+        
+        # Add combat state information if available
+        try:
+            f.write("\nGame State Information:\n")
+            game_state_info = get_game_state_info()
+            for key, value in game_state_info.items():
+                f.write(f"{key}: {value}\n")
+        except Exception as e:
+            f.write(f"\nFailed to collect game state info: {e}\n")
     
     logging.info(f"Crash report created: {crash_file}")
+
+def get_game_state_info():
+    """Collect relevant game state information for crash reports"""
+    info = {}
+    
+    # Try to access game module attributes safely
+    try:
+        if hasattr(game, 'game_state'):
+            info['game_state'] = getattr(game, 'game_state')
+        
+        # Check if we're in combat
+        if hasattr(game, 'current_enemy_daemon') and getattr(game, 'current_enemy_daemon'):
+            enemy = getattr(game, 'current_enemy_daemon')
+            info['in_combat'] = True
+            info['enemy_daemon'] = f"{enemy.name} (Lv.{enemy.level})"
+            info['enemy_hp'] = f"{enemy.hp}/{enemy.max_hp}"
+        else:
+            info['in_combat'] = False
+            
+        # Check if in training mode
+        if hasattr(game, 'is_training_battle'):
+            info['training_mode'] = getattr(game, 'is_training_battle', False)
+            
+    except Exception as e:
+        info['error_collecting'] = str(e)
+    
+    return info
 
 def main():
     """Main bootstrap function"""

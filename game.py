@@ -74,14 +74,18 @@ def create_daemon(daemon_id, level=1):
     # Create programs for the daemon based on learnset and level
     daemon_programs = []
     learnset = base_stats.get("learnset", {}) # Learnset should be like {"1": ["prog1"], "5": ["prog2"]}
+    
+    # Track if we found valid programs for this daemon
+    found_valid_programs = False
+    
     for lvl_str, program_ids in learnset.items():
         try:
             learn_level = int(lvl_str)
             if level >= learn_level:
                 # Ensure program_ids is a list
                 if not isinstance(program_ids, list):
-                    logging.warning(f"Program IDs for level {learn_level} in '{daemon_id}' learnset is not a list: {program_ids}. Skipping.")
-                    continue
+                    program_ids = [program_ids]  # Convert single string to list
+                    logging.warning(f"Program IDs for level {learn_level} in '{daemon_id}' learnset is not a list: {program_ids}. Converting to list.")
 
                 for program_id in program_ids:
                     if program_id in PROGRAMS:
@@ -90,7 +94,7 @@ def create_daemon(daemon_id, level=1):
                         if not any(p.id == program_id for p in daemon_programs):
                             program = Program(
                                 program_id,
-                                program_data.get("name", f"Unknown Program {program_id}"), # Use .get
+                                program_data.get("name", f"Unknown Program {program_id}"),
                                 program_data.get("power", 0),
                                 program_data.get("accuracy", 100),
                                 program_data.get("type", "Untyped"),
@@ -98,13 +102,68 @@ def create_daemon(daemon_id, level=1):
                                 program_data.get("description", "")
                             )
                             daemon_programs.append(program)
+                            found_valid_programs = True
                     else:
                          logging.warning(f"Program ID '{program_id}' listed in learnset for '{daemon_id}' but not found in PROGRAMS.")
         except ValueError:
             logging.warning(f"Invalid level '{lvl_str}' in learnset for daemon '{daemon_id}'.")
 
+    # If no valid programs were found, add default programs based on daemon type
+    if not found_valid_programs or not daemon_programs:
+        logging.warning(f"Daemon {daemon_id} (level {level}) has no valid programs. Adding default programs.")
+        # Get primary type from daemon
+        daemon_types = base_stats.get("types", [])
+        primary_type = daemon_types[0] if isinstance(daemon_types, list) and daemon_types else base_stats.get("type", "UNTYPED")
+        
+        # Add default damage program based on type
+        default_program_id = None
+        
+        # Map types to default program IDs
+        type_program_map = {
+            "VIRUS": "data_siphon",
+            "FIREWALL": "firewall_bash",
+            "CRYPTO": "hash_attack",
+            "TROJAN": "backdoor_exploit",
+            "NEURAL": "neural_shock",
+            "SHELL": "shell_smash",
+            "GHOST": "ghost_touch",
+            "UNTYPED": "basic_attack"
+        }
+        
+        # Get default program ID based on daemon type
+        if primary_type.upper() in type_program_map:
+            default_program_id = type_program_map[primary_type.upper()]
+        else:
+            default_program_id = "basic_attack"  # Fallback
+        
+        # Check if default program exists in PROGRAMS, otherwise use backup
+        if default_program_id in PROGRAMS:
+            program_data = PROGRAMS[default_program_id]
+        else:
+            # Create a basic attack program as last resort
+            program_data = {
+                "name": f"{daemon_id.capitalize()} Attack",
+                "power": 40,
+                "accuracy": 95,
+                "type": primary_type,
+                "effect": "damage",
+                "description": "A basic attack."
+            }
+            default_program_id = "basic_attack"
+        
+        # Create and add default program
+        default_program = Program(
+            default_program_id,
+            program_data.get("name", f"{daemon_id.capitalize()} Attack"),
+            program_data.get("power", 40),
+            program_data.get("accuracy", 95),
+            program_data.get("type", primary_type),
+            program_data.get("effect", "damage"),
+            program_data.get("description", "A basic attack.")
+        )
+        daemon_programs.append(default_program)
+        logging.info(f"Added default program '{default_program.name}' to daemon {daemon_id}")
 
-    # Create and return the daemon
     # Ensure 'types' is a list, handle potential single string from older config
     daemon_types = base_stats.get("types", ["Untyped"]) # Default to list with "Untyped"
     if isinstance(daemon_types, str):
@@ -238,12 +297,14 @@ def run_combat(player, enemy_daemon):
         # --- Enemy Turn (Simple AI) ---
         # Check if enemy can act based on status effects
         enemy_can_act = True
+        enemy_action = "locked" # Default to locked (will be changed if can act)
+        enemy_program = None # Initialize to None to avoid undefined variable issue
+        
         if enemy_daemon.status_effect == "LOCKED":
             # 30% chance of being unable to act when LOCKED
             if random.random() < 0.3:
                 print(f"{enemy_daemon.name} is LOCKED and unable to act this turn!")
                 enemy_can_act = False
-                enemy_action = "locked" # Skip turn
             else:
                 print(f"{enemy_daemon.name} fights against the LOCK!")
                 enemy_can_act = True
@@ -262,9 +323,7 @@ def run_combat(player, enemy_daemon):
                     enemy_program = random.choice(enemy_daemon.programs)
             else:
                  enemy_action = "struggle" # Or some default action if no programs
-        else:
-            enemy_action = "locked" # Skip turn 
-            enemy_program = None
+                 # enemy_program remains None
 
         # --- Determine Turn Order ---
         player_goes_first = player_active_daemon.speed >= enemy_daemon.speed
@@ -429,7 +488,6 @@ def run_combat(player, enemy_daemon):
                 damage = max(1, int(enemy_daemon.max_hp / 16))  # 1/16 of max HP
                 print(f"{enemy_daemon.name} is damaged by CORRUPTION! (-{damage} HP)")
                 if enemy_daemon.take_damage(damage):
-                    print(f"{enemy_daemon.name} fainted from CORRUPTION!")
                     combat_state = "player_win"
 
         # Check if player needs to switch after their daemon fainted mid-round
@@ -490,6 +548,95 @@ def run_combat(player, enemy_daemon):
 
     return combat_state # Return final status
 
+def start_training_battle(player, difficulty="normal"):
+    """
+    Initialize a training battle with selected difficulty and daemon type.
+    
+    Args:
+        player: The player object
+        difficulty: "easy" (-2 levels), "normal" (same level), or "hard" (+2 levels)
+    
+    Returns:
+        Boolean indicating if the battle was successfully started
+    """
+    logging.info(f"Training battle requested with difficulty: {difficulty}")
+    
+    # Check if player has at least one healthy daemon
+    if not any(daemon.current_hp > 0 for daemon in player.daemons):
+        print("You need at least one healthy daemon to start training!")
+        logging.warning("Training battle canceled - no healthy daemons")
+        return False
+    
+    # Calculate level based on difficulty
+    avg_level = sum(d.level for d in player.daemons) // len(player.daemons)
+    level_modifier = {
+        "easy": -2,
+        "normal": 0,
+        "hard": +2
+    }.get(difficulty.lower(), 0)
+    
+    training_level = max(1, avg_level + level_modifier)
+    
+    # Get available daemons for training
+    available_daemons = list(DAEMON_BASE_STATS.keys())
+    
+    if not available_daemons:
+        print("No training daemons available. Check configuration files.")
+        logging.error("Training battle failed - no daemon configurations found")
+        return False
+    
+    # Display available daemon types
+    print("\nChoose opponent daemon type:")
+    for i, daemon_id in enumerate(available_daemons[:10]):  # Limit to first 10
+        daemon_name = DAEMON_BASE_STATS[daemon_id].get("name", daemon_id)
+        daemon_type = DAEMON_BASE_STATS[daemon_id].get("type", "Unknown")
+        print(f"{i+1}. {daemon_name} ({daemon_type})")
+    print(f"{len(available_daemons[:10])+1}. Random")
+    
+    daemon_choice = input("> ").strip()
+    
+    # Parse player's choice
+    selected_daemon_id = None
+    try:
+        if daemon_choice.isdigit():
+            choice_idx = int(daemon_choice) - 1
+            if 0 <= choice_idx < len(available_daemons[:10]):
+                selected_daemon_id = available_daemons[choice_idx]
+            elif choice_idx == len(available_daemons[:10]):
+                selected_daemon_id = random.choice(available_daemons)
+            else:
+                print("Invalid selection. Choosing random opponent.")
+                selected_daemon_id = random.choice(available_daemons)
+        else:
+            print("Invalid input. Choosing random opponent.")
+            selected_daemon_id = random.choice(available_daemons)
+    except Exception as e:
+        logging.error(f"Error selecting training daemon: {e}")
+        print("Error selecting daemon. Choosing random opponent.")
+        selected_daemon_id = random.choice(available_daemons)
+    
+    # Create the enemy daemon
+    try:
+        enemy_daemon = create_daemon(selected_daemon_id, level=training_level)
+        # Ensure it has programs
+        if not enemy_daemon.programs:
+            logging.warning(f"Training daemon {selected_daemon_id} had no programs, adding default ones")
+            enemy_daemon.programs = {"Basic Attack": {"power": 40, "type": enemy_daemon.types[0], "accuracy": 95}}
+        
+        print(f"\nStarting training battle against a level {training_level} {enemy_daemon.name}!")
+        
+        # Set training battle flag (for reduced XP and no capture)
+        global is_training_battle
+        is_training_battle = True
+        
+        # Start combat
+        return run_combat(player, enemy_daemon)
+    
+    except Exception as e:
+        logging.error(f"Failed to start training battle: {e}", exc_info=True)
+        print("Failed to start training battle. Please try again.")
+        return False
+
 def main(): # Explicitly ensure zero indentation
     # Configure logging
     # Use rotating file handler later if needed
@@ -537,12 +684,17 @@ def main(): # Explicitly ensure zero indentation
             print(f"Welcome back, {player.name}!")
             # Ensure player location is valid after loading
             if player.location not in world_map:
-                 logging.warning(f"Loaded player location '{player.location}' is invalid. Resetting to start location '{start_location_id}'.")
-                 player.location = start_location_id
+                logging.warning(f"Loaded player location '{player.location}' is invalid. Resetting to start location '{start_location_id}'.")
+                print(f"Warning: Your last saved location was corrupted. Moving you to a safe location.")
+                player.location = start_location_id
+                # Verify the start location exists
+                if start_location_id not in world_map:
+                    logging.critical(f"Start location ID '{start_location_id}' is also invalid! Cannot proceed.")
+                    print("CRITICAL ERROR: Game configuration is corrupted. Please contact support.")
+                    sys.exit(1)
     except Exception as e:
         logging.error(f"Failed to load game for {player_name}: {e}", exc_info=True)
         print(f"Error loading saved game: {e}. Starting a new game.")
-        player = None # Ensure player is None if loading failed
 
     if player is None:
         # Create new player
@@ -855,6 +1007,7 @@ def main(): # Explicitly ensure zero indentation
         elif game_state == "combat":
             if not current_enemy_daemon:
                  logging.error("Entered combat state but current_enemy_daemon is None.")
+                 print("Combat initialization error. Returning to exploration mode.")
                  game_state = "roaming" # Recover by going back to roaming
                  continue
 
@@ -863,7 +1016,19 @@ def main(): # Explicitly ensure zero indentation
                  print("You have no conscious Daemons left!")
                  combat_result = "enemy_win" # Treat as immediate loss if no daemon available
             else:
-                 combat_result = run_combat(player, current_enemy_daemon)
+                 # Additional validation before starting combat
+                 try:
+                     # Verify enemy daemon is properly initialized
+                     if not hasattr(current_enemy_daemon, 'hp') or current_enemy_daemon.hp <= 0:
+                         raise AttributeError("Enemy daemon has invalid health")
+                     if not hasattr(current_enemy_daemon, 'name'):
+                         raise AttributeError("Enemy daemon has no name attribute")
+                     
+                     combat_result = run_combat(player, current_enemy_daemon)
+                 except Exception as e:
+                     logging.error(f"Combat system error: {e}", exc_info=True)
+                     print("An error occurred during combat. Returning to exploration.")
+                     combat_result = "player_flee"  # Graceful exit from combat
 
             # Handle combat outcome
             if combat_result == "enemy_win":
